@@ -12,52 +12,6 @@ interface MapGridProps {
   onExitNode?: () => void;
 }
 
-const BIOME_STYLES: Record<string, { bg: string; icon: string; border: string; glow?: string }> = {
-  'Way Station': { 
-    bg: 'bg-gradient-to-br from-amber-950 via-[#2e1d0c] to-amber-900', 
-    icon: '🏮', 
-    border: 'border-2 border-amber-400 animate-pulse', 
-    glow: 'shadow-[0_0_30px_rgba(245,158,11,0.95)] ring-2 ring-amber-400/80' 
-  },
-  'way_station': { 
-    bg: 'bg-gradient-to-br from-amber-950 via-[#2e1d0c] to-amber-900', 
-    icon: '🏮', 
-    border: 'border-2 border-amber-400 animate-pulse', 
-    glow: 'shadow-[0_0_30px_rgba(245,158,11,0.95)] ring-2 ring-amber-400/80' 
-  },
-  'caravan': { 
-    bg: 'bg-gradient-to-br from-amber-950 via-[#2e1d0c] to-amber-900', 
-    icon: '🏮', 
-    border: 'border-2 border-amber-400 animate-pulse', 
-    glow: 'shadow-[0_0_30px_rgba(245,158,11,0.95)] ring-2 ring-amber-400/80' 
-  },
-  'Faction Outpost': { 
-    bg: 'bg-gradient-to-br from-[#2a1a10] via-[#1a1410] to-[#251508]', 
-    icon: '🏯', 
-    border: 'border-2 border-[#c89b3c] animate-pulse', 
-    glow: 'shadow-[0_0_25px_rgba(200,155,60,0.85)] ring-2 ring-[#c89b3c]/70' 
-  },
-  'Spirit Spring': { 
-    bg: 'bg-gradient-to-br from-emerald-950 via-teal-900 to-emerald-700', 
-    icon: '💎', 
-    border: 'border-2 border-emerald-400 animate-pulse', 
-    glow: 'shadow-[0_0_25px_rgba(52,211,153,0.9)] ring-2 ring-emerald-400/80' 
-  },
-  'Southern Border Mountain': { bg: 'bg-[#2b1f16]', icon: '⛰️', border: 'border-amber-800/60' },
-  'Northern Plains Grassland': { bg: 'bg-[#1b2b1a]', icon: '🌾', border: 'border-emerald-800/60' },
-  'Eastern Sea Reef': { bg: 'bg-[#122830]', icon: '🌊', border: 'border-cyan-700/60' },
-  'Western Desert Dunes': { bg: 'bg-[#3b2d15]', icon: '🏜️', border: 'border-yellow-700/60' },
-  'Central Continent Plains': { bg: 'bg-[#1e1c24]', icon: '🏛️', border: 'border-purple-800/60' },
-  'Bamboo Forest': { bg: 'bg-[#1e3a2b]', icon: '🎋', border: 'border-emerald-700/50' },
-  'Venom Swamp': { bg: 'bg-[#2d1b36]', icon: '☠️', border: 'border-purple-800/50' },
-  'Ancient Ruins': { bg: 'bg-[#2b2b2b]', icon: '🏛️', border: 'border-amber-900/50' },
-  'Sect Grounds': { bg: 'bg-[#1b2a38]', icon: '🏯', border: 'border-sky-800/50' },
-  'Spirit Veins': { bg: 'bg-[#163832]', icon: '⛏️', border: 'border-teal-700/50' },
-  'Mountain Pass': { bg: 'bg-[#3b2d1d]', icon: '⛰️', border: 'border-amber-800/50' },
-  'Blood Mountain': { bg: 'bg-[#3f1617]', icon: '🩸', border: 'border-red-800/50' },
-  'Wilderness': { bg: 'bg-[#1a2318]', icon: '🌲', border: 'border-[#3b4d3c]/30' }
-};
-
 export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
   const { 
     grid, 
@@ -73,18 +27,16 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
   
   const { cultivator, captureWildGu, fetchAperture } = useCultivatorStore();
 
-  const [logs, setLogs] = useState<string[]>(['> Primeval Aperture steady. Ready to explore 30x30 regional sector.']);
+  const [logs, setLogs] = useState<string[]>(['> Primeval Aperture steady. Ready to explore 15x15 dynamic sector.']);
   const [activeEncounter, setActiveEncounter] = useState<Encounter | null>(null);
   const [encounterResult, setEncounterResult] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const logsEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // If initial node payload exists, load it immediately into the store
     if (initialNodeData) {
       loadInitialNodeData(initialNodeData);
     } else if (grid.length === 0) {
-      // Fallback: actively request regional grid from the backend
       fetchLocalGrid('southern_border_gu_yue');
     }
   }, [initialNodeData, loadInitialNodeData, fetchLocalGrid, grid.length]);
@@ -93,30 +45,20 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
     logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [logs]);
 
-  const handleCombat = async (customEnemy?: any) => {
-    const enemy = customEnemy || activeEncounter?.enemy || (activeEncounter?.enemy_name ? {
-      name: activeEncounter.enemy_name,
-      hp: activeEncounter.enemy_hp || 100,
-      atk: activeEncounter.enemy_atk || 15,
-      reward_stones: activeEncounter.reward_stones || 10,
-      is_enforcer: false
-    } : null);
+  // Phase 2: Dynamic 15x15 Viewport Window (Lag Annihilation)
+  // Slices the 30x30 matrix into a strict 15x15 sub-grid dynamically centered on the player (X, Y)
+  const WINDOW_SIZE = 15;
+  const HALF_WINDOW = Math.floor(WINDOW_SIZE / 2); // 7
 
-    if (!enemy) return;
+  const startX = Math.max(0, Math.min(30 - WINDOW_SIZE, playerLocation.x - HALF_WINDOW));
+  const startY = Math.max(0, Math.min(30 - WINDOW_SIZE, playerLocation.y - HALF_WINDOW));
+  const endX = startX + WINDOW_SIZE;
+  const endY = startY + WINDOW_SIZE;
 
-    // Start combat via the global store
-    const { startCombat } = useCombatStore.getState();
-    startCombat(
-      enemy.name,
-      enemy.hp || 100,
-      enemy.atk || 15,
-      enemy.reward_stones || 10,
-      Boolean(enemy.is_enforcer)
-    );
-
-    // Clear the map encounter overlay since the CombatArena will take over
-    setActiveEncounter(null);
-  };
+  // Sliced 15x15 array (Only 225 tiles in DOM)
+  const visibleTiles = grid.filter(
+    (tile) => tile.x >= startX && tile.x < endX && tile.y >= startY && tile.y < endY
+  );
 
   const isWayStationTile = (tile: any) => {
     if (!tile) return false;
@@ -133,13 +75,51 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
     );
   };
 
+  const isSpiritSpringTile = (tile: any) => {
+    if (!tile) return false;
+    return (
+      tile.type === 'Spirit Spring' ||
+      tile.terrain === 'Spirit Spring' ||
+      tile.type === 'spirit_spring' ||
+      Boolean(tile.is_spirit_spring)
+    );
+  };
+
+  const getTileAsset = (tile: any) => {
+    if (isWayStationTile(tile)) return '/assets/waystation.webp';
+    if (isSpiritSpringTile(tile)) return '/assets/spring.webp';
+    return '/assets/bamboo.webp';
+  };
+
+  const handleCombat = async (customEnemy?: any) => {
+    const enemy = customEnemy || activeEncounter?.enemy || (activeEncounter?.enemy_name ? {
+      name: activeEncounter.enemy_name,
+      hp: activeEncounter.enemy_hp || 100,
+      atk: activeEncounter.enemy_atk || 15,
+      reward_stones: activeEncounter.reward_stones || 10,
+      is_enforcer: false
+    } : null);
+
+    if (!enemy) return;
+
+    const { startCombat } = useCombatStore.getState();
+    startCombat(
+      enemy.name,
+      enemy.hp || 100,
+      enemy.atk || 15,
+      enemy.reward_stones || 10,
+      Boolean(enemy.is_enforcer)
+    );
+
+    setActiveEncounter(null);
+  };
+
   const handleTravel = async (targetX: number, targetY: number) => {
-    if (activeEncounter) return; // Block move while encounter is unresolved
+    if (activeEncounter) return;
     try {
       const { encounter, logs: newLogs } = await travel(targetX, targetY);
       setLogs(prev => [...prev, ...newLogs]);
 
-      // Check if player stepped on or arrived at a Way Station
       const currentTile = grid.find((t) => t.x === targetX && t.y === targetY);
       if (isWayStationTile(currentTile)) {
         setLogs(prev => [...prev, '> 🏮 Arrived at Regional Way Station. Inter-regional caravan transit available.']);
@@ -156,7 +136,6 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
         }
       }
 
-      // Sync cultivator essence and stones
       fetchAperture();
     } catch (err: any) {
       setLogs(prev => [...prev, `> Movement Error: ${err.message}`]);
@@ -262,27 +241,43 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
   const isPlayerOnWayStation = playerLocation.x === 15 && playerLocation.y === 15;
 
   return (
-    <div className="absolute inset-0 bg-[#12100d] z-40 flex flex-col md:flex-row font-serif overflow-hidden select-none">
+    <div className="relative w-full h-full min-h-screen bg-[#0d0b09] overflow-hidden select-none font-serif flex flex-col md:flex-row">
 
-      {/* LEFT / CENTER VIEWPORT: 2.5D Isometric Transform Canvas (30x30 Finite Grid) */}
-      <div className="flex-1 relative h-full w-full overflow-hidden bg-[#0d0b09]">
+      {/* LEFT / CENTER VIEWPORT: 2.5D Isometric Dynamic 15x15 Canvas */}
+      <div className="flex-1 relative h-full w-full overflow-hidden bg-[#0a0907]">
 
-        {/* Atmospheric Ambient Vignette & Background Textures */}
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_transparent_20%,_rgba(8,7,5,0.92)_100%)] pointer-events-none z-10"></div>
-        <div className="absolute inset-0 opacity-15 bg-[url('https://www.transparenttextures.com/patterns/black-scales.png')] pointer-events-none z-10"></div>
+        {/* Dynamic Hunter Matrix: Predator Pursuit Banner (z-40) */}
+        {enforcer && enforcer.active && enforcer.status !== 'defeated' && (
+          <div className="absolute top-20 right-8 z-40 flex items-center gap-3 bg-gradient-to-r from-red-950/95 via-[#1a0808]/95 to-red-950/95 border-2 border-red-600/80 px-4 py-2.5 rounded-2xl shadow-[0_8px_32px_rgba(220,38,38,0.7)] animate-pulse">
+            <span className="text-xl animate-bounce">⚖️</span>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-bold text-red-300 uppercase tracking-widest font-sans">
+                  ⚠️ PREDATOR MATRIX: {enforcer.name}
+                </span>
+                <span className="text-[9px] bg-red-900 text-red-200 px-1.5 py-0.5 rounded font-mono font-bold border border-red-500">
+                  ⚡ {Math.round(enforcer.stamina)} / {enforcer.max_stamina}
+                </span>
+              </div>
+              <span className="text-[10px] text-zinc-400 font-sans block mt-0.5">
+                Distance: <strong className="text-amber-300">{Math.abs(enforcer.pos[0] - playerLocation.x) + Math.abs(enforcer.pos[1] - playerLocation.y)} tiles</strong> • Status: <strong className="text-red-400 capitalize">{enforcer.status}</strong>
+              </span>
+            </div>
+          </div>
+        )}
 
         <TransformWrapper
-          initialScale={0.7}
-          minScale={0.35}
-          maxScale={2.5}
+          initialScale={0.45}
+          minScale={0.25}
+          maxScale={1.6}
           centerOnInit={true}
           limitToBounds={false}
-          wheel={{ step: 0.08 }}
+          wheel={{ step: 0.05 }}
         >
           {({ zoomIn, zoomOut, resetTransform }) => (
             <>
-              {/* Floating Camera & Sector Controls */}
-              <div className="absolute top-4 left-4 z-20 flex items-center gap-2 bg-[#12100d]/90 backdrop-blur border border-[#2a2620] px-3.5 py-2 rounded-xl shadow-2xl">
+              {/* Sector Navigation & Camera Controls (z-30) */}
+              <div className="absolute top-4 left-4 z-30 flex items-center gap-2 bg-[#12100d] border border-[#2a2620] px-3.5 py-2 rounded-xl">
                 <span className="text-[10px] uppercase font-sans tracking-[0.2em] text-[#c89b3c] font-bold">
                   {currentRegionName} • [{playerLocation.x}, {playerLocation.y}]
                 </span>
@@ -310,12 +305,12 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
                 </button>
                 <div className="w-px h-4 bg-[#2a2620] mx-1"></div>
                 
-                {/* Way Station Inter-Regional Caravan Transit Action Button */}
+                {/* Way Station Transit Button */}
                 <button
                   onClick={() => { playBrushSound(); setWayStationModalOpen(true); }}
                   className={`text-[10px] px-2.5 py-0.5 rounded uppercase tracking-wider font-bold border transition-all flex items-center gap-1.5 cursor-pointer ${
                     isPlayerOnWayStation 
-                      ? 'bg-amber-950 text-amber-300 border-amber-500 animate-pulse shadow-[0_0_12px_rgba(245,158,11,0.5)]'
+                      ? 'bg-amber-950 text-amber-300 border-amber-500 animate-pulse'
                       : 'bg-[#1a1814] text-[#8a8275] hover:text-[#c89b3c] border-[#2a2620]'
                   }`}
                   title="Open Way Station Caravan Transit Router"
@@ -324,99 +319,58 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
                   <span>Way Station</span>
                 </button>
 
-                <div className="w-px h-4 bg-[#2a2620] mx-1"></div>
-                <button
-                  onClick={() => { playBrushSound(); onExitNode?.(); }}
-                  className="text-[10px] text-[#8a8275] hover:text-[#c89b3c] px-2 py-0.5 rounded hover:bg-[#1a1814] uppercase tracking-wider font-bold border border-[#2a2620] transition-colors cursor-pointer"
-                >
-                  Exit Node
-                </button>
+                {onExitNode && (
+                  <>
+                    <div className="w-px h-4 bg-[#2a2620] mx-1"></div>
+                    <button
+                      onClick={() => { playBrushSound(); onExitNode(); }}
+                      className="text-[10px] text-[#8a8275] hover:text-[#c89b3c] px-2 py-0.5 rounded hover:bg-[#1a1814] uppercase tracking-wider font-bold border border-[#2a2620] transition-colors cursor-pointer"
+                    >
+                      Exit Node
+                    </button>
+                  </>
+                )}
               </div>
 
-              {/* Dynamic Hunter Matrix: Predator Pursuit Banner */}
-              {enforcer && enforcer.active && enforcer.status !== 'defeated' && (
-                <div className="absolute top-20 right-8 z-30 flex items-center gap-3 bg-gradient-to-r from-red-950/95 via-[#1a0808]/95 to-red-950/95 border-2 border-red-600/80 px-4 py-2.5 rounded-2xl shadow-[0_8px_32px_rgba(220,38,38,0.7)] backdrop-blur-md animate-pulse">
-                  <span className="text-xl animate-bounce">⚖️</span>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[11px] font-bold text-red-300 uppercase tracking-widest font-sans">
-                        ⚠️ PREDATOR MATRIX: {enforcer.name}
-                      </span>
-                      <span className="text-[9px] bg-red-900 text-red-200 px-1.5 py-0.5 rounded font-mono font-bold border border-red-500 shadow">
-                        ⚡ {Math.round(enforcer.stamina)} / {enforcer.max_stamina}
-                      </span>
-                    </div>
-                    <span className="text-[10px] text-zinc-400 font-sans block mt-0.5">
-                      Distance: <strong className="text-amber-300">{Math.abs(enforcer.pos[0] - playerLocation.x) + Math.abs(enforcer.pos[1] - playerLocation.y)} tiles</strong> • Status: <strong className="text-red-400 capitalize">{enforcer.status}</strong>
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              {/* Pan/Zoom Canvas Area */}
+              {/* Pan/Zoom Canvas Area (z-0) */}
               <TransformComponent
-                wrapperClass="!w-full !h-full cursor-grab active:cursor-grabbing"
-                contentClass="!w-full !h-full flex items-center justify-center min-w-[2200px] min-h-[1900px]"
+                wrapperClass="!w-full !h-full cursor-grab active:cursor-grabbing z-0"
+                contentClass="!w-full !h-full flex items-center justify-center min-w-[3400px] min-h-[3000px]"
               >
                 {/* 2.5D Isometric Tilt Wrapper */}
                 <div
-                  className="relative p-16 transition-transform duration-200 ease-out"
+                  className="relative p-16 transition-transform duration-200 ease-out z-0"
                   style={{
                     transform: 'rotateX(60deg) rotateZ(-45deg)',
                     transformStyle: 'preserve-3d',
                   }}
                 >
-                  {/* Atmospheric Void Fog & Boundary Framing around the 30x30 perimeter [0..29, 0..29] */}
-                  <div className="absolute -inset-8 border-4 border-[#3b3226] rounded-3xl pointer-events-none shadow-[inset_0_0_80px_rgba(0,0,0,0.95),0_0_100px_rgba(0,0,0,0.95)]"></div>
-                  <div className="absolute -inset-16 bg-gradient-to-r from-[#070605] via-transparent to-[#070605] opacity-80 blur-xl pointer-events-none"></div>
-                  <div className="absolute -inset-16 bg-gradient-to-b from-[#070605] via-transparent to-[#070605] opacity-80 blur-xl pointer-events-none"></div>
-                  
-                  {/* Coordinate Boundary Indicators */}
-                  <div 
-                    className="absolute -top-7 left-1/2 -translate-x-1/2 text-[8px] font-mono font-bold text-[#8a8275] tracking-[0.2em] uppercase bg-[#0d0b09] px-3 py-0.5 rounded-full border border-[#2a2620] shadow pointer-events-none"
-                    style={{ transform: 'rotateZ(45deg) rotateX(-60deg)' }}
-                  >
-                    North Boundary • Y: 0
-                  </div>
-                  <div 
-                    className="absolute -bottom-7 left-1/2 -translate-x-1/2 text-[8px] font-mono font-bold text-[#8a8275] tracking-[0.2em] uppercase bg-[#0d0b09] px-3 py-0.5 rounded-full border border-[#2a2620] shadow pointer-events-none"
-                    style={{ transform: 'rotateZ(45deg) rotateX(-60deg)' }}
-                  >
-                    South Boundary • Y: 29
-                  </div>
-                  <div 
-                    className="absolute top-1/2 -left-8 -translate-y-1/2 text-[8px] font-mono font-bold text-[#8a8275] tracking-[0.2em] uppercase bg-[#0d0b09] px-3 py-0.5 rounded-full border border-[#2a2620] shadow pointer-events-none"
-                    style={{ transform: 'rotateZ(45deg) rotateX(-60deg)' }}
-                  >
-                    West Boundary • X: 0
-                  </div>
-                  <div 
-                    className="absolute top-1/2 -right-8 -translate-y-1/2 text-[8px] font-mono font-bold text-[#8a8275] tracking-[0.2em] uppercase bg-[#0d0b09] px-3 py-0.5 rounded-full border border-[#2a2620] shadow pointer-events-none"
-                    style={{ transform: 'rotateZ(45deg) rotateX(-60deg)' }}
-                  >
-                    East Boundary • X: 29
-                  </div>
+                  {/* Outer Boundary Void Border */}
+                  <div className="absolute -inset-6 border-4 border-[#2a2218] rounded-3xl pointer-events-none z-0"></div>
 
-                  {/* The 30x30 Tile Grid Plane (900 finite tiles) */}
+                  {/* The Dynamic 15x15 Tile Grid Plane (225 tiles, 192px each) */}
                   <div
-                    className="grid gap-1 p-5 bg-[#0a0907]/95 rounded-2xl border-2 border-[#2a2620] shadow-[0_0_80px_rgba(0,0,0,0.95)]"
+                    className="grid gap-2 p-6 bg-[#0a0907] rounded-2xl border-2 border-[#2a2620] z-0"
                     style={{
                       display: 'grid',
-                      gridTemplateColumns: 'repeat(30, minmax(0, 1fr))',
+                      gridTemplateColumns: 'repeat(15, minmax(192px, 1fr))',
+                      gridTemplateRows: 'repeat(15, minmax(192px, 1fr))',
                       transformStyle: 'preserve-3d'
                     }}
                   >
-                    {grid.map((tile, idx) => {
+                    {visibleTiles.map((tile) => {
                       const isPlayerHere = tile.x === playerLocation.x && tile.y === playerLocation.y;
-                      const isEnforcerHere = Boolean(enforcer && enforcer.active && enforcer.status !== 'defeated' && tile.x === enforcer.pos[0] && tile.y === enforcer.pos[1]);
-                      const isAdjacent = Math.abs(tile.x - playerLocation.x) <= 1 && Math.abs(tile.y - playerLocation.y) <= 1 && !isPlayerHere;
+                      const isEnforcerHere = Boolean(
+                        enforcer && enforcer.active && enforcer.status !== 'defeated' && 
+                        tile.x === enforcer.pos[0] && tile.y === enforcer.pos[1]
+                      );
+                      const isAdjacent = Math.abs(tile.x - playerLocation.x) <= 1 && 
+                                         Math.abs(tile.y - playerLocation.y) <= 1 && 
+                                         !isPlayerHere;
                       
                       const isWayStation = isWayStationTile(tile);
-                      const isFaction = tile.type === 'Faction Outpost' || tile.terrain === 'Faction Outpost' || tile.is_faction_node;
-                      const isSpring = tile.type === 'Spirit Spring' || tile.terrain === 'Spirit Spring' || tile.is_spirit_spring;
-                      
-                      const styleKey = isWayStation ? 'Way Station' : isFaction ? 'Faction Outpost' : isSpring ? 'Spirit Spring' : (tile.type || tile.terrain || tile.biome || 'Wilderness');
-                      const style = BIOME_STYLES[styleKey] || (tile.biome ? BIOME_STYLES[tile.biome] : undefined) || BIOME_STYLES['Wilderness'];
+                      const isFaction = Boolean(tile.type === 'Faction Outpost' || tile.terrain === 'Faction Outpost' || tile.is_faction_node);
+                      const tileAssetSrc = getTileAsset(tile);
 
                       const handleTileClick = () => {
                         if (isAdjacent) {
@@ -429,56 +383,69 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
 
                       return (
                         <div
-                          key={idx}
+                          key={`${tile.x}_${tile.y}`}
                           onClick={handleTileClick}
                           className={`
-                            relative w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 aspect-square border rounded flex items-center justify-center transition-all duration-300
-                            ${isEnforcerHere ? 'bg-gradient-to-br from-red-950 via-rose-950 to-red-900 border-2 border-red-500 shadow-[0_0_30px_rgba(239,68,68,0.95)] ring-2 ring-red-500 z-25 animate-pulse' : !tile.discovered ? 'bg-[#0a0907] border-[#1a1814]' : `${style.bg} ${style.border}`}
-                            ${!tile.discovered && !isEnforcerHere ? 'opacity-35' : 'opacity-100 shadow-md'}
-                            ${(isSpring || isFaction || isWayStation) && tile.discovered ? (style.glow || '') : ''}
-                            ${isPlayerHere ? 'ring-2 ring-[#c89b3c] shadow-[0_0_25px_rgba(200,155,60,0.9)] z-30 scale-110' : ''}
-                            ${isAdjacent ? 'cursor-pointer hover:border-[#c89b3c] hover:scale-105 hover:z-20 animate-pulse border-gold/40' : 'cursor-default'}
+                            relative w-48 h-48 rounded-2xl overflow-hidden select-none transition-transform duration-200 z-0
+                            ${isAdjacent ? 'cursor-pointer hover:scale-102 border-2 border-amber-400/80' : 'border border-[#2a2620] cursor-default'}
+                            ${isPlayerHere ? 'border-2 border-[#c89b3c]' : ''}
                           `}
-                          title={`${isEnforcerHere ? `⚔️ ${enforcer?.name} (${enforcer?.status})` : isWayStation ? '🏮 Way Station (Caravan Transit Node)' : isFaction ? `Faction Outpost: ${tile.faction || 'Sect Territory'}` : isSpring ? 'Natural Jade Spirit Spring' : tile.type} (${tile.x}, ${tile.y})`}
                           style={{ transformStyle: 'preserve-3d' }}
+                          title={`${isEnforcerHere ? `⚔️ ${enforcer?.name}` : isWayStation ? '🏮 Way Station' : isFaction ? `Faction Outpost: ${tile.faction}` : tile.type} (${tile.x}, ${tile.y})`}
                         >
-                          {/* Billboard / Counter-Rotate Icon Container */}
-                          <div
-                            className="flex items-center justify-center pointer-events-none select-none"
-                            style={{
-                              transform: 'rotateZ(45deg) rotateX(-60deg)',
-                              transformOrigin: 'center center'
-                            }}
-                          >
-                            {isPlayerHere ? (
-                              <div className="relative flex flex-col items-center">
-                                <span className="text-lg md:text-xl drop-shadow-[0_4px_10px_rgba(200,155,60,1)] text-[#c89b3c] font-bold animate-bounce">
-                                  🚶
-                                </span>
-                                <div className="w-2.5 h-0.5 bg-[#c89b3c]/60 rounded-full blur-[1px] mt-0.5"></div>
-                              </div>
-                            ) : isEnforcerHere ? (
-                              <div className="relative flex flex-col items-center">
-                                <span className="text-lg md:text-xl drop-shadow-[0_4px_15px_rgba(239,68,68,1)] text-red-400 font-bold animate-pulse">
-                                  🗡️
-                                </span>
-                                <div className="w-3 h-0.5 bg-red-600 rounded-full blur-[1px] mt-0.5 animate-pulse"></div>
-                                <div className="absolute -top-5 whitespace-nowrap bg-black/95 border border-red-500/80 px-1.5 py-0.5 rounded text-[7px] text-red-300 font-bold uppercase tracking-wider shadow-lg">
-                                  ⚔️ Enforcer ({Math.round(enforcer?.stamina || 0)}⚡)
-                                </div>
-                              </div>
-                            ) : isWayStation ? (
-                              <div className="relative flex flex-col items-center">
-                                <span className="text-sm md:text-base opacity-100 drop-shadow-[0_0_8px_rgba(245,158,11,0.9)] animate-bounce">
-                                  🏮
-                                </span>
-                              </div>
-                            ) : tile.discovered ? (
-                              <span className={`text-xs md:text-sm opacity-90 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] ${isSpring ? 'scale-115 animate-bounce' : ''}`}>
-                                {style.icon}
+                          {/* Base Terrain Asset Image (z-0) */}
+                          <img
+                            src={tileAssetSrc}
+                            alt={tile.type || 'Tile Terrain'}
+                            className={`w-full h-full object-cover select-none pointer-events-none z-0 ${
+                              !tile.discovered ? 'brightness-40 opacity-40' : 'brightness-100 opacity-100'
+                            }`}
+                            loading="lazy"
+                          />
+
+                          {/* Faction Node Overlay Badge (z-10) */}
+                          {isFaction && tile.discovered && (
+                            <div className="absolute top-2 left-2 z-10 bg-black/85 border border-[#c89b3c] px-2.5 py-1 rounded-lg">
+                              <span className="text-xs font-bold text-amber-200 uppercase font-serif tracking-wider">
+                                {tile.faction || 'Sect Outpost'}
                               </span>
-                            ) : null}
-                          </div>
+                            </div>
+                          )}
+
+                          {/* Way Station Overlay Badge (z-10) */}
+                          {isWayStation && tile.discovered && (
+                            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10 bg-black/90 border border-amber-400 px-3 py-1 rounded-full whitespace-nowrap">
+                              <span className="text-xs font-bold text-amber-300 uppercase font-serif tracking-widest">
+                                Way Station
+                              </span>
+                            </div>
+                          )}
+
+                          {/* Player Avatar Asset Floating (z-20) */}
+                          {isPlayerHere && (
+                            <div className="absolute inset-0 flex flex-col items-center justify-center z-20 pointer-events-none animate-bounce">
+                              <img
+                                src="/assets/pointer.webp"
+                                alt="Player Avatar"
+                                className="w-20 h-20 object-contain pointer-events-none select-none"
+                              />
+                              <span className="text-[10px] bg-black/90 text-amber-300 border border-amber-400 px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider font-mono">
+                                {cultivator?.name || 'Cultivator'}
+                              </span>
+                            </div>
+                          )}
+
+                          {/* Predator Enforcer Entity (z-20) */}
+                          {isEnforcerHere && (
+                            <div className="absolute inset-0 flex flex-col items-center justify-center z-20 pointer-events-none">
+                              <div className="w-16 h-16 rounded-full bg-red-950/90 border-2 border-red-500 flex items-center justify-center text-red-200 font-bold text-xs uppercase font-sans tracking-widest animate-pulse">
+                                Enforcer
+                              </div>
+                              <span className="text-[9px] bg-red-950 text-red-200 border border-red-500 px-2 py-0.5 rounded font-bold font-mono mt-1">
+                                {enforcer?.name}
+                              </span>
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -490,340 +457,131 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
         </TransformWrapper>
       </div>
 
-      {/* RIGHT PANEL: Cultivator Stats & Logs */}
-      <div className="w-full md:w-80 bg-[#12100d]/90 border-l border-[#2a2620] flex flex-col shadow-2xl">
+      {/* RIGHT DRAWER: Exploration Log & Sector Intel (z-30) */}
+      <div className="w-full md:w-80 h-48 md:h-full bg-[#12100d] border-t md:border-t-0 md:border-l border-[#2a2620] flex flex-col z-30">
+        
+        {/* Header */}
+        <div className="p-3 border-b border-[#2a2620] bg-[#1a1814] flex justify-between items-center">
+          <span className="text-xs font-bold text-[#d5cfc4] uppercase tracking-wider">Sector Telemetry</span>
+          <span className="text-[10px] text-amber-400 font-mono font-bold">15x15 Window</span>
+        </div>
 
-        <div className="p-6 border-b border-[#2a2620]">
-          <div className="flex justify-between items-start mb-2">
-            <div>
-              <h2 className="text-xl font-bold text-[#d5cfc4] tracking-widest">{cultivator?.name || 'Cultivator'}</h2>
-              <span className="text-[10px] text-[#c89b3c] font-sans uppercase tracking-[0.2em]">Rank {cultivator?.rank} • {cultivator?.stage}</span>
+        {/* Scrollable Event Logs */}
+        <div className="flex-1 p-3 overflow-y-auto font-sans text-xs space-y-1.5 custom-scrollbar bg-[#0a0907]/90 text-zinc-300">
+          {logs.map((log, idx) => (
+            <div key={idx} className="leading-relaxed">
+              {log}
             </div>
-            <div className="text-right text-[10px] text-[#8a8275] font-sans uppercase">
-              💎 {cultivator?.spirit_stones ?? 0} Stones
-            </div>
+          ))}
+          <div ref={logsEndRef} />
+        </div>
+
+        {/* Current Node Summary */}
+        <div className="p-3 bg-[#12100d] border-t border-[#2a2620] text-xs space-y-1 font-sans">
+          <div className="flex justify-between text-[#8a8275]">
+            <span>Sector Position:</span>
+            <span className="text-amber-300 font-mono font-bold">[{playerLocation.x}, {playerLocation.y}]</span>
           </div>
-
-          <div className="mt-3 space-y-2 text-xs font-sans">
-            <div>
-              <div className="flex justify-between text-[11px] mb-1">
-                <span className="text-[#8a8275]">Primeval Sea</span>
-                <span className="text-[#3b4d3c] font-semibold">{cultivator?.primeval_essence ?? 0}% Essence</span>
-              </div>
-              <div className="w-full bg-[#1a1814] rounded-full h-1.5 overflow-hidden border border-[#2a2620]">
-                <div
-                  className="bg-[#3b4d3c] h-full rounded-full"
-                  style={{ width: `${((cultivator?.primeval_essence ?? 0) / (cultivator?.max_essence || 1)) * 100}%` }}
-                />
-              </div>
-            </div>
-
-            <div className="pt-2 border-t border-[#2a2620] space-y-1.5 mt-2">
-              <div className="flex justify-between">
-                <span className="text-[#8a8275]">Physical Strength:</span>
-                <span className="text-[#d5cfc4] font-bold">
-                  {cultivator?.stats.strength.total ?? 0}
-                  <span className="text-[#3b4d3c] text-[10px] ml-1 font-normal">
-                    ({cultivator?.stats.strength.modifiers.join(', ') || 'Base Human'})
-                  </span>
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-[#8a8275]">Body Tempering:</span>
-                <span className="text-[#d5cfc4] font-bold">
-                  {cultivator?.stats.defense.total ?? 0}
-                  <span className="text-[#3b4d3c] text-[10px] ml-1 font-normal">
-                    ({cultivator?.stats.defense.modifiers.join(', ') || 'Mortal Skin'})
-                  </span>
-                </span>
-              </div>
-            </div>
+          <div className="flex justify-between text-[#8a8275]">
+            <span>Active Region:</span>
+            <span className="text-[#d5cfc4] truncate max-w-[150px]">{currentRegionName}</span>
           </div>
         </div>
 
-        <div className="p-6 flex-1 flex flex-col overflow-hidden">
-          <h3 className="text-sm uppercase tracking-[0.2em] text-[#5c2424] font-bold mb-3 border-b border-[#5c2424]/30 pb-1 flex items-center justify-between">
-            <span>Destiny Logs</span>
-            <span className="text-[10px] font-mono text-[#8a8275] font-normal">30x30 Matrix</span>
-          </h3>
-          <div className="flex-1 overflow-y-auto text-xs text-[#d5cfc4] space-y-2 font-sans pr-1 custom-scrollbar">
-            {logs.map((log, idx) => (
-              <p key={idx} className="border-l-2 border-[#3b4d3c]/50 pl-2 leading-relaxed opacity-90 text-[11px]">
-                {log}
-              </p>
-            ))}
-            <div ref={logsEndRef} className="h-4" />
-          </div>
-        </div>
       </div>
 
-      {/* Interactive Encounter Modal */}
+      {/* Modal Overlays (z-50) */}
+      <WayStationModal
+        isOpen={isWayStationModalOpen}
+        onClose={() => setWayStationModalOpen(false)}
+      />
+
+      {/* Interactive Tile Encounter Modal (z-50) */}
       {activeEncounter && (
-        <div className="fixed inset-0 z-50 bg-[#0a0907]/90 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="max-w-md w-full glass-card border border-[#c89b3c]/40 bg-[#12100d] p-6 rounded-2xl shadow-[0_0_50px_rgba(200,155,60,0.15)] animate-fade-in font-serif">
-
-            <div className="text-center mb-4">
-              <span className={`text-xs uppercase tracking-[0.2em] font-sans font-bold block mb-1 ${
-                activeEncounter.type === 'faction' ? 'text-amber-400' :
-                activeEncounter.type === 'wild_gu' ? 'text-emerald-400' :
-                activeEncounter.type === 'resource' ? 'text-[#c89b3c]' : 'text-red-400'
-              }`}>
-                {activeEncounter.type === 'faction' ? '🏯 Institutional Outpost' :
-                  activeEncounter.type === 'wild_gu' ? '🦋 Rare Gu Sighting' :
-                  activeEncounter.type === 'resource' ? '✨ Fortuitous Encounter' : '💀 Sudden Ambush'}
-              </span>
-              <h2 className="text-2xl text-[#d5cfc4] font-bold">{activeEncounter.title}</h2>
-              <div className="w-24 h-0.5 bg-[#c89b3c]/50 mx-auto mt-2"></div>
-            </div>
-
-            <p className="text-[#8a8275] text-sm leading-relaxed mb-6 font-sans">
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 select-none">
+          <div className="max-w-md w-full bg-[#12100d] border border-[#c89b3c] p-6 rounded-2xl font-serif text-center">
+            
+            <h3 className="text-xl font-bold text-amber-300 tracking-wider mb-2">
+              {activeEncounter.title || 'Sector Anomaly'}
+            </h3>
+            <p className="text-xs text-zinc-300 font-sans mb-4 leading-relaxed">
               {activeEncounter.desc}
             </p>
 
-            {/* Faction Institutional Outpost Info & Interaction */}
-            {activeEncounter.type === 'faction' && (
-              <div className="space-y-4 mb-6 font-sans">
-                {/* Outpost Standing Banner */}
-                <div className={`p-3 rounded-xl border flex items-center justify-between ${
-                  activeEncounter.is_hostile 
-                    ? 'bg-red-950/40 border-red-800/80 shadow-[0_0_15px_rgba(220,38,38,0.2)]' 
-                    : 'bg-emerald-950/30 border-emerald-700/60 shadow-[0_0_15px_rgba(16,185,129,0.15)]'
-                }`}>
-                  <div>
-                    <span className="text-[10px] text-[#8a8275] uppercase tracking-wider block">Faction Standing</span>
-                    <span className={`text-xs font-bold ${activeEncounter.is_hostile ? 'text-red-300' : 'text-emerald-300'}`}>
-                      {activeEncounter.standing}
-                    </span>
-                  </div>
-                  <span className={`text-xs font-mono font-bold px-2.5 py-1 rounded ${
-                    activeEncounter.is_hostile 
-                      ? 'bg-red-900/60 text-red-200 border border-red-700' 
-                      : 'bg-emerald-900/60 text-emerald-200 border border-emerald-700'
-                  }`}>
-                    {activeEncounter.reputation && activeEncounter.reputation > 0 ? `+${activeEncounter.reputation}` : activeEncounter.reputation} Rep
-                  </span>
+            {encounterResult ? (
+              <div className="space-y-4">
+                <div className="p-3 bg-black/60 border border-[#2a2620] rounded-xl text-xs text-amber-200 font-sans">
+                  {encounterResult}
                 </div>
-
-                {/* Hostile Confrontation View */}
-                {activeEncounter.is_hostile ? (
-                  <div className="bg-[#171410] border border-red-900/60 p-4 rounded-xl space-y-3">
-                    <div className="flex items-center gap-2 text-red-400 font-bold text-xs">
-                      <span>⚠️</span>
-                      <span>HOSTILE FORCES DETECTED</span>
-                    </div>
-                    <p className="text-xs text-[#8a8275] leading-relaxed">
-                      Clan sentinels recognize your notorious demonic reputation and draw their primeval weapons! Trespassing is punishable by death.
-                    </p>
-                    {activeEncounter.guard_enemy && (
-                      <div className="bg-[#0a0907] border border-red-950 p-2.5 rounded-lg flex justify-between items-center text-xs">
-                        <span className="text-[#d5cfc4] font-medium">{activeEncounter.guard_enemy.name}</span>
-                        <span className="text-[#8a8275]">HP: {activeEncounter.guard_enemy.hp} • ATK: {activeEncounter.guard_enemy.atk}</span>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  /* Neutral / Positive Faction Actions View */
-                  <div className="space-y-3">
-                    {/* Trade Section */}
-                    <div>
-                      <span className="text-[10px] uppercase tracking-wider text-[#c89b3c] font-bold block mb-1.5">
-                        📦 Outpost Market Trade
-                      </span>
-                      <div className="space-y-2 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
-                        {activeEncounter.trade_inventory?.map((item: any) => {
-                          const canAfford = (cultivator?.spirit_stones || 0) >= item.cost;
-                          return (
-                            <div key={item.id} className="bg-[#171410] border border-[#2a2620] hover:border-[#c89b3c]/50 p-2.5 rounded-xl flex items-center justify-between transition-all">
-                              <div className="pr-2">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-xs font-bold text-[#d5cfc4]">{item.name}</span>
-                                  <span className="text-[9px] text-[#8a8275] font-mono">[{item.path}]</span>
-                                </div>
-                                <span className="text-[10px] text-[#8a8275] block mt-0.5">{item.desc}</span>
-                              </div>
-                              <button
-                                onClick={() => handleFactionTrade(item)}
-                                disabled={!canAfford || isSubmitting}
-                                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
-                                  canAfford 
-                                    ? 'bg-[#c89b3c] text-[#12100d] hover:brightness-110 shadow-md cursor-pointer' 
-                                    : 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
-                                }`}
-                              >
-                                {item.cost} 💎
-                              </button>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    {/* Demonic Extortion Section */}
-                    <div className="bg-[#171410] border border-red-900/50 p-3 rounded-xl space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-red-400 flex items-center gap-1.5">
-                          <span>☠️</span> Demonic Armed Extortion
-                        </span>
-                        <span className="text-[10px] text-[#c89b3c] font-bold font-mono">+80 Stones</span>
-                      </div>
-                      <p className="text-[10px] text-[#8a8275] leading-relaxed">
-                        Plunder the supply cache by force. Decreases reputation by -40, shifts alignment towards Demonic (-15), and places a Bounty on your head!
-                      </p>
-                      <button
-                        onClick={handleFactionExtort}
-                        disabled={isSubmitting}
-                        className="w-full py-2 bg-gradient-to-r from-red-950 to-red-900 hover:from-red-900 hover:to-red-800 border border-red-700 text-red-200 text-xs font-bold rounded-lg transition-all shadow-md cursor-pointer uppercase tracking-wider"
-                      >
-                        {isSubmitting ? 'Plundering...' : '☠️ Execute Extortion & Rob Outpost'}
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Resource Info Box */}
-            {activeEncounter.type === 'resource' && (
-              <div className="bg-[#171410] border border-[#c89b3c]/40 p-3.5 rounded-xl mb-6 font-sans flex items-center justify-between">
-                <div>
-                  <span className="text-[#c89b3c] font-bold text-sm block">{activeEncounter.title}</span>
-                  <span className="text-xs text-[#8a8275]">Natural spiritual bounty discovered in the wild.</span>
-                </div>
-                <div className="bg-[#1a1814] border border-[#c89b3c]/50 px-3 py-1.5 rounded-lg text-right">
-                  <span className="text-xs text-[#c89b3c] font-bold">+{activeEncounter.amount || 15} Stones</span>
-                </div>
-              </div>
-            )}
-
-            {/* Wild Gu Info Box */}
-            {activeEncounter.wild_gu && (
-              <div className="bg-[#171410] border border-[#3b4d3c]/40 p-3.5 rounded-xl mb-6 font-sans">
-                <div className="flex justify-between items-center mb-1">
-                  <span className="text-[#3b4d3c] font-bold text-sm">{activeEncounter.wild_gu.name}</span>
-                  <span className="text-[10px] bg-[#3b4d3c]/20 border border-[#3b4d3c] text-[#3b4d3c] px-2 py-0.5 rounded uppercase font-bold">
-                    Tier {activeEncounter.wild_gu.tier} • {activeEncounter.wild_gu.path}
-                  </span>
-                </div>
-                <p className="text-xs text-[#8a8275]">{activeEncounter.wild_gu.effect_desc}</p>
-              </div>
-            )}
-
-            {/* Enemy Combat Info Box */}
-            {activeEncounter.enemy_name && (
-              <div className="bg-[#171410] border border-[#5c2424]/40 p-3.5 rounded-xl mb-6 font-sans">
-                <div className="flex justify-between items-center mb-1">
-                  <span className="text-red-400 font-bold text-sm">{activeEncounter.enemy_name}</span>
-                  <span className="text-xs text-[#c89b3c]">Reward: +{activeEncounter.reward_stones} Stones</span>
-                </div>
-                <div className="text-xs text-[#8a8275] flex gap-4 mt-2">
-                  <span>Enemy Health: {activeEncounter.enemy_hp}</span>
-                  <span>Enemy Attack: {activeEncounter.enemy_atk}</span>
-                </div>
-              </div>
-            )}
-
-            {/* Outcome Display */}
-            {encounterResult && (
-              <div className={`mb-6 p-3 rounded-lg border text-center text-xs font-sans font-semibold
-                ${encounterResult.includes('failed') ? 'bg-[#5c2424]/10 border-red-500 text-red-400' : 'bg-[#3b4d3c]/10 border-[#3b4d3c] text-[#3b4d3c]'}
-              `}>
-                {encounterResult}
-              </div>
-            )}
-
-            {/* Action Buttons */}
-            <div className="flex gap-3 font-sans">
-              {encounterResult ? (
                 <button
                   onClick={() => setActiveEncounter(null)}
-                  className="w-full py-3 bg-[#c89b3c] text-[#12100d] font-bold text-xs uppercase tracking-widest rounded-lg hover:brightness-110 transition-all cursor-pointer"
+                  className="w-full py-2 bg-[#1a1814] border border-[#2a2620] hover:border-[#c89b3c] text-xs font-sans uppercase tracking-wider rounded-xl text-[#d5cfc4]"
                 >
                   Continue Exploration
                 </button>
-              ) : activeEncounter.type === 'faction' ? (
-                activeEncounter.is_hostile ? (
-                  <>
-                    <button
-                      onClick={handleFactionAttack}
-                      disabled={isSubmitting}
-                      className="flex-1 py-3 bg-gradient-to-r from-[#5c2424] to-[#3f1617] text-[#d5cfc4] font-bold text-xs uppercase tracking-widest rounded-lg hover:brightness-110 transition-all border border-[#5c2424] cursor-pointer"
-                    >
-                      ⚔️ Engage Sentinels
-                    </button>
-                    <button
-                      onClick={() => setActiveEncounter(null)}
-                      className="py-3 px-4 bg-[#1a1814] text-[#8a8275] border border-[#2a2620] text-xs uppercase tracking-wider rounded-lg hover:text-white transition-all cursor-pointer"
-                    >
-                      Flee Outpost
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    onClick={() => setActiveEncounter(null)}
-                    className="w-full py-2.5 bg-[#1a1814] hover:bg-[#2a2620] text-[#8a8275] hover:text-[#d5cfc4] border border-[#2a2620] hover:border-[#c89b3c] text-xs uppercase tracking-wider rounded-lg transition-all cursor-pointer"
-                  >
-                    ✕ Depart Peacefully
-                  </button>
-                )
-              ) : activeEncounter.type === 'wild_gu' ? (
-                <>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {activeEncounter.type === 'wild_gu' && (
                   <button
                     onClick={handleCaptureGu}
                     disabled={isSubmitting}
-                    className="flex-1 py-3 bg-gradient-to-r from-[#3b4d3c] to-[#1e3a2b] text-[#d5cfc4] font-bold text-xs uppercase tracking-widest rounded-lg hover:brightness-110 transition-all disabled:opacity-50 border border-[#3b4d3c] cursor-pointer"
+                    className="w-full py-2.5 bg-emerald-950 border border-emerald-500 hover:bg-emerald-900 text-xs font-sans font-bold uppercase tracking-wider rounded-xl text-emerald-200"
                   >
-                    {isSubmitting ? 'Subduing...' : 'Subdue & Store'}
+                    {isSubmitting ? 'Subduing Gu...' : `Subdue [${activeEncounter.wild_gu?.name}]`}
                   </button>
-                  <button
-                    onClick={() => setActiveEncounter(null)}
-                    className="py-3 px-4 bg-[#1a1814] text-[#8a8275] border border-[#2a2620] text-xs uppercase tracking-wider rounded-lg hover:text-white transition-all cursor-pointer"
-                  >
-                    Leave
-                  </button>
-                </>
-              ) : activeEncounter.type === 'resource' ? (
-                <>
+                )}
+
+                {activeEncounter.type === 'resource' && (
                   <button
                     onClick={handleHarvest}
                     disabled={isSubmitting}
-                    className="flex-1 py-3 bg-gradient-to-r from-[#c89b3c] to-[#8B6914] text-[#12100d] font-bold text-xs uppercase tracking-widest rounded-lg hover:brightness-110 transition-all disabled:opacity-50 border border-[#c89b3c] cursor-pointer"
+                    className="w-full py-2.5 bg-amber-950 border border-amber-500 hover:bg-amber-900 text-xs font-sans font-bold uppercase tracking-wider rounded-xl text-amber-200"
                   >
-                    {isSubmitting ? 'Harvesting...' : 'Harvest'}
+                    {isSubmitting ? 'Harvesting...' : 'Harvest Primeval Stones'}
                   </button>
-                  <button
-                    onClick={() => setActiveEncounter(null)}
-                    className="py-3 px-4 bg-[#1a1814] text-[#8a8275] border border-[#2a2620] text-xs uppercase tracking-wider rounded-lg hover:text-white transition-all cursor-pointer"
-                  >
-                    Ignore
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button
-                    onClick={handleCombat}
-                    disabled={isSubmitting}
-                    className="flex-1 py-3 bg-gradient-to-r from-[#5c2424] to-[#3f1617] text-[#d5cfc4] font-bold text-xs uppercase tracking-widest rounded-lg hover:brightness-110 transition-all disabled:opacity-50 border border-[#5c2424] cursor-pointer"
-                  >
-                    {isSubmitting ? 'Battling...' : 'Engage & Slaughter'}
-                  </button>
-                  <button
-                    onClick={() => setActiveEncounter(null)}
-                    className="py-3 px-4 bg-[#1a1814] text-[#8a8275] border border-[#2a2620] text-xs uppercase tracking-wider rounded-lg hover:text-white transition-all cursor-pointer"
-                  >
-                    Flee
-                  </button>
-                </>
-              )}
-            </div>
+                )}
+
+                {activeEncounter.type === 'faction' && (
+                  <div className="space-y-2">
+                    {activeEncounter.trade_inventory && activeEncounter.trade_inventory.length > 0 && (
+                      <button
+                        onClick={() => handleFactionTrade(activeEncounter.trade_inventory![0])}
+                        disabled={isSubmitting}
+                        className="w-full py-2 bg-emerald-950 border border-emerald-500 hover:bg-emerald-900 text-xs font-sans font-bold uppercase tracking-wider rounded-xl text-emerald-200"
+                      >
+                        Trade with Clan Merchant
+                      </button>
+                    )}
+                    <button
+                      onClick={handleFactionExtort}
+                      disabled={isSubmitting}
+                      className="w-full py-2 bg-red-950 border border-red-500 hover:bg-red-900 text-xs font-sans font-bold uppercase tracking-wider rounded-xl text-red-200"
+                    >
+                      Extort Outpost (+Stones, Demonic)
+                    </button>
+                    <button
+                      onClick={handleFactionAttack}
+                      className="w-full py-2 bg-[#1a1814] border border-[#2a2620] hover:border-red-500 text-xs font-sans uppercase tracking-wider rounded-xl text-zinc-300"
+                    >
+                      Attack Clan Guards
+                    </button>
+                  </div>
+                )}
+
+                <button
+                  onClick={() => setActiveEncounter(null)}
+                  className="w-full py-2 bg-[#1a1814] border border-[#2a2620] hover:border-zinc-500 text-xs font-sans uppercase tracking-wider rounded-xl text-zinc-400"
+                >
+                  Leave Unmolested
+                </button>
+              </div>
+            )}
+
           </div>
         </div>
       )}
 
-      {/* Way Station Inter-Regional Caravan Transit Modal */}
-      <WayStationModal 
-        isOpen={isWayStationModalOpen} 
-        onClose={() => setWayStationModalOpen(false)} 
-      />
     </div>
   );
 }
