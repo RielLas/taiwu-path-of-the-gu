@@ -368,6 +368,7 @@ class CultivatorState:
             "Strength Path": 35 + (self.rank * 10),
             "Blood Path": 20 + (self.rank * 5),
             "Moon Path": 28 + (self.rank * 8),
+            "Refinement Path": 8 + (self.rank * 3),
             "Transformation Path": 22 + (self.rank * 5),
             "Water Path": 10,
             "Light Path": 12,

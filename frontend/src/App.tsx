@@ -3,7 +3,7 @@ import OverworldModal from './components/world/OverworldModal';
 import MapGrid from './components/map/MapGrid';
 import TaiwuHUD from './components/ui/TaiwuHUD';
 import ApertureModal from './components/aperture/ApertureModal';
-import CrucibleModal from './components/crucible/CrucibleModal';
+import RefinementCauldron from './components/refinement/RefinementCauldron';
 import AscensionChamber from './components/views/AscensionChamber';
 import CharacterLedger from './components/views/CharacterLedger';
 import CombatArena from './components/views/CombatArena';
@@ -129,9 +129,9 @@ function App() {
         <ApertureModal onClose={() => setActiveTab('World')} />
       )}
 
-      {/* Refine Modal */}
+      {/* Refine Modal: Dao of Refinement Cauldron */}
       {activeTab === 'Refine' && (
-        <CrucibleModal onClose={() => setActiveTab('World')} />
+        <RefinementCauldron onClose={() => setActiveTab('World')} />
       )}
 
       {/* Closed Door Cultivation: Ascension Chamber */}
