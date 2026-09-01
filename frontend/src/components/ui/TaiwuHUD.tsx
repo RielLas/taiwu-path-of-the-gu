@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { useCultivatorStore } from '../../hooks/useCultivator';
-import { useWorldStore } from '../../hooks/useWorldStore';
 import { playBrushSound } from '../../hooks/useAudio';
 
 interface TaiwuHUDProps {
@@ -10,7 +9,6 @@ interface TaiwuHUDProps {
 
 export default function TaiwuHUD({ activeTab, setActiveTab }: TaiwuHUDProps) {
   const { cultivator, fetchAperture, meditate } = useCultivatorStore();
-  const { currentRegionName, playerLocation } = useWorldStore();
   
   const [isMeditating, setIsMeditating] = useState(false);
   const [meditateToast, setMeditateToast] = useState<string | null>(null);
@@ -56,21 +54,6 @@ export default function TaiwuHUD({ activeTab, setActiveTab }: TaiwuHUDProps) {
       {/* Visual Degradation: Full-Screen Critical Low HP Crimson Vignette */}
       {isCriticalHp && (
         <div className="fixed inset-0 bg-red-950/20 shadow-[inset_0_0_100px_rgba(153,27,27,0.7)] border-[10px] border-red-950/60 pointer-events-none z-40 animate-pulse" />
-      )}
-
-      {/* Prominent Active Geographic Instance Header (z-50) */}
-      {activeTab === 'World' && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 pointer-events-auto flex items-center gap-2.5 bg-[#12100d]/95 backdrop-blur-xl border border-[#c89b3c]/60 px-5 py-2 rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.85)] animate-fade-in font-serif">
-          <span className="text-base text-amber-400">📍</span>
-          <div className="flex items-center gap-2.5">
-            <span className="text-xs md:text-sm font-bold tracking-widest text-[#d5cfc4] uppercase drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
-              {currentRegionName}
-            </span>
-            <span className="text-[10px] font-sans font-bold text-amber-300 bg-amber-950/80 border border-amber-600/60 px-2 py-0.5 rounded-full uppercase tracking-wider shadow">
-              30x30 Grid [{playerLocation.x}, {playerLocation.y}]
-            </span>
-          </div>
-        </div>
       )}
 
       <div className="absolute bottom-0 w-full flex items-end justify-center pointer-events-none pb-4 z-50">
