@@ -88,6 +88,8 @@ export interface CultivatorStats {
   primeval_essence: number;
   max_essence: number;
   aptitude_percentage?: number;
+  stamina?: number;
+  max_stamina?: number;
   nourish_progress?: number;
   essence_multiplier?: number;
   essence_color?: string;
@@ -115,6 +117,15 @@ export interface NourishResponse {
   stage: string;
   nourish_progress: number;
   essence_multiplier: number;
+  cultivator: CultivatorStats;
+}
+
+export interface MeditateResponse {
+  success: boolean;
+  stamina_cost: number;
+  essence_restored: number;
+  hp_restored: number;
+  message: string;
   cultivator: CultivatorStats;
 }
 

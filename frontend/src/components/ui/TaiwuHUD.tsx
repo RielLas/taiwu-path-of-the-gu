@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useCultivatorStore } from '../../hooks/useCultivator';
 
 interface TaiwuHUDProps {
@@ -7,7 +7,9 @@ interface TaiwuHUDProps {
 }
 
 export default function TaiwuHUD({ activeTab, setActiveTab }: TaiwuHUDProps) {
-  const { cultivator, fetchAperture } = useCultivatorStore();
+  const { cultivator, fetchAperture, meditate } = useCultivatorStore();
+  const [isMeditating, setIsMeditating] = useState(false);
+  const [meditateToast, setMeditateToast] = useState<string | null>(null);
 
   useEffect(() => {
     if (!cultivator) fetchAperture();
@@ -21,14 +23,66 @@ export default function TaiwuHUD({ activeTab, setActiveTab }: TaiwuHUDProps) {
     ? Math.min(100, Math.max(0, (cultivator.primeval_essence / cultivator.max_essence) * 100))
     : 0;
 
+  const handleMeditate = async () => {
+    if ((cultivator?.stamina || 0) < 20 || isMeditating) return;
+    setIsMeditating(true);
+    setMeditateToast(null);
+    try {
+      const res = await meditate(20);
+      setMeditateToast(res.message || '🧘 Meditated: Essence & HP Restored!');
+      setTimeout(() => setMeditateToast(null), 3500);
+    } catch (err: any) {
+      setMeditateToast(`💀 ${err.message}`);
+      setTimeout(() => setMeditateToast(null), 3500);
+    } finally {
+      setIsMeditating(false);
+    }
+  };
+
   return (
     <div className="absolute bottom-0 w-full flex items-end justify-center pointer-events-none pb-4 z-50">
       
+      {/* Meditate Toast Notification */}
+      {meditateToast && (
+        <div className="absolute -top-16 left-1/2 -translate-x-1/2 z-40 px-4 py-2 bg-[#12100d]/95 border border-[#c89b3c] rounded-xl text-xs font-sans font-bold text-amber-200 shadow-[0_0_25px_rgba(200,155,60,0.4)] animate-fade-in pointer-events-none whitespace-nowrap">
+          {meditateToast}
+        </div>
+      )}
+
       {/* HUD Container - Glassmorphism base */}
       <div className="w-[95%] max-w-7xl h-28 glass-panel rounded-[2rem] flex items-center justify-between px-8 md:px-16 pointer-events-auto relative overflow-visible border-b-0 rounded-b-none bg-[#12100d]/90 backdrop-blur-md border border-[#2a2620]">
         
         {/* Subtle top glow line */}
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[80%] h-[1px] bg-gradient-to-r from-transparent via-[#8a8275] to-transparent opacity-50"></div>
+
+        {/* Stamina & Meditate Floating Island Header */}
+        <div className="absolute -top-6 left-1/2 -translate-x-1/2 flex items-center gap-3 z-30 pointer-events-auto">
+          {/* Stamina Pool Gauge */}
+          <div className="bg-[#12100d]/95 backdrop-blur-md border border-[#c89b3c]/40 px-3.5 py-1 rounded-full flex items-center gap-2 shadow-lg">
+            <span className="text-amber-400 text-xs font-bold font-mono">⚡ {cultivator?.stamina ?? 100} / {cultivator?.max_stamina ?? 100}</span>
+            <div className="w-16 h-1.5 bg-[#0a0907] rounded-full overflow-hidden border border-[#2a2620]">
+              <div 
+                className="h-full bg-gradient-to-r from-amber-600 to-amber-300 rounded-full transition-all duration-300"
+                style={{ width: `${Math.min(100, Math.max(0, ((cultivator?.stamina ?? 100) / (cultivator?.max_stamina || 100)) * 100))}%` }}
+              />
+            </div>
+            <span className="text-[9px] text-[#8a8275] uppercase tracking-wider font-sans font-bold">Stamina</span>
+          </div>
+
+          {/* Meditate Action Button */}
+          <button
+            onClick={handleMeditate}
+            disabled={isMeditating || (cultivator?.stamina || 0) < 20}
+            className={`px-3 py-1 rounded-full text-[10px] font-sans font-bold uppercase tracking-wider transition-all border flex items-center gap-1.5 shadow-lg cursor-pointer ${
+              (cultivator?.stamina || 0) >= 20 && !isMeditating
+                ? 'bg-gradient-to-r from-amber-950 via-[#241a12] to-amber-900 border-[#c89b3c] text-amber-200 hover:brightness-125 hover:shadow-[0_0_15px_rgba(200,155,60,0.5)] active:scale-95'
+                : 'bg-black/60 border-zinc-800 text-zinc-600 cursor-not-allowed'
+            }`}
+          >
+            <span>🧘</span>
+            <span>{isMeditating ? 'Meditating...' : 'Meditate (-20 ⚡)'}</span>
+          </button>
+        </div>
 
         {/* Left Side Portrait - Interactive Trigger for Character Ledger */}
         <div 
@@ -142,3 +196,4 @@ export default function TaiwuHUD({ activeTab, setActiveTab }: TaiwuHUDProps) {
     </div>
   );
 }
+

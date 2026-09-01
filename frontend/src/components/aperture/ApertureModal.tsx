@@ -30,7 +30,7 @@ export default function ApertureModal({ onClose }: ApertureModalProps) {
   const isFractured = cultivator?.aperture_status === 'Fractured';
   const isPeakStage = cultivator?.stage?.toLowerCase().includes('peak');
   const essenceColor = cultivator?.essence_color || '#22c55e';
-  const canNourish = (cultivator?.primeval_essence || 0) >= 30 && !isPeakStage;
+  const canNourish = (cultivator?.primeval_essence || 0) >= 30 && (cultivator?.stamina || 0) >= 10 && !isPeakStage;
 
   const handleNourish = async () => {
     setIsNourishing(true);
@@ -255,7 +255,7 @@ export default function ApertureModal({ onClose }: ApertureModalProps) {
                         : 'bg-zinc-800 text-zinc-500 border border-zinc-700 cursor-not-allowed'
                     }`}
                   >
-                    {isNourishing ? '🌊 Washing Aperture Walls...' : '🌊 Wash Aperture Walls (Drain 30% Primeval Sea)'}
+                    {isNourishing ? '🌊 Washing Aperture Walls...' : '🌊 Wash Aperture Walls (Drain 30% Sea • 10 Stamina)'}
                   </button>
                 )}
               </div>

@@ -131,10 +131,15 @@ async def move_player(
     new_x = player_cultivator.player_pos[0] + step_x
     new_y = player_cultivator.player_pos[1] + step_y
     
-    # Check boundaries (15x15)
-    if new_x < 0 or new_x >= 15 or new_y < 0 or new_y >= 15:
-        raise HTTPException(status_code=400, detail="Boundary of region reached.")
+    # Check Stamina for movement (2 Stamina per step)
+    player_cultivator.update_stamina_passive()
+    if player_cultivator.stamina < 2.0:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Exhausted! Insufficient Stamina to traverse the terrain (Requires 2 Stamina, Current: {player_cultivator.stamina:.1f}). Meditate or wait to recover."
+        )
         
+    player_cultivator.stamina = max(0.0, round(player_cultivator.stamina - 2.0, 1))
     player_cultivator.player_pos = [new_x, new_y]
     
     tiles = get_or_create_region(region_id)
@@ -386,3 +391,15 @@ async def combat_action(payload: Dict[str, Any]):
         "loot": {"stones": reward_stones} if is_victory else None,
         "cultivator": player_cultivator.get_stats()
     }
+
+@router.post("/meditate")
+async def meditate_in_world(payload: Dict[str, Any] = {}):
+    """
+    Meditate action to restore Primeval Essence and HP by burning stamina.
+    """
+    cost = payload.get("stamina_cost", 20.0)
+    result = player_cultivator.meditate(cost)
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("message", "Meditation failed."))
+    return result
+

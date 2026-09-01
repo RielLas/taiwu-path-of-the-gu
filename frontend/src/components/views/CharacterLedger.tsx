@@ -162,6 +162,20 @@ export default function CharacterLedger({ onClose }: CharacterLedgerProps) {
               </div>
             </div>
 
+            {/* Stamina Pool */}
+            <div>
+              <div className="flex justify-between text-xs mb-1">
+                <span className="text-[#8a8275] uppercase tracking-wider">Action Stamina</span>
+                <span className="text-amber-400 font-bold">{cultivator.stamina ?? 100} / {cultivator.max_stamina ?? 100}</span>
+              </div>
+              <div className="w-full h-2.5 bg-[#1a1814] rounded-full border border-[#2a2620] overflow-hidden">
+                <div 
+                  className="h-full bg-gradient-to-r from-amber-700 to-amber-400 transition-all duration-500"
+                  style={{ width: `${Math.min(100, ((cultivator.stamina ?? 100) / (cultivator.max_stamina || 100)) * 100)}%` }}
+                />
+              </div>
+            </div>
+
             {/* Core Stats Grid */}
             <div className="grid grid-cols-3 gap-2 pt-2">
               <div className="bg-[#171410] border border-[#2a2620] p-3 rounded-xl text-center">

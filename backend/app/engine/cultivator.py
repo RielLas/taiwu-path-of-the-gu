@@ -6,6 +6,7 @@ and permanently/passively alter the cultivator's physical stats.
 Active Gu (e.g., Moonlight Gu, Blood Frenzy Gu) are used in actions/battles consuming Primeval Essence.
 """
 
+import time
 from typing import List, Dict, Any, Optional
 
 class CultivatorState:
@@ -19,6 +20,9 @@ class CultivatorState:
         self.primeval_essence: float = 93.0
         self.max_essence: float = 93.0
         self.nourish_progress: float = 0.0
+        self.stamina: float = 100.0
+        self.max_stamina: float = 100.0
+        self.last_stamina_regen: float = time.time()
         self.essence_type: str = "Rank 1 Initial Green Copper Primeval Essence"
         self.spirit_stones: int = 65
         self.player_pos: List[int] = [7, 7]  # [x, y]
@@ -179,11 +183,24 @@ class CultivatorState:
             }
         ]
 
+    def update_stamina_passive(self) -> None:
+        """
+        Passive Stamina Recovery Engine:
+        Regenerates +1 Stamina per real-time minute (60 seconds) elapsed.
+        """
+        now = time.time()
+        elapsed = max(0.0, now - self.last_stamina_regen)
+        if elapsed >= 1.0:
+            stamina_gain = elapsed / 60.0  # 1 stamina per 60 seconds
+            self.stamina = min(self.max_stamina, round(self.stamina + stamina_gain, 2))
+            self.last_stamina_regen = now
+
     def get_stats(self) -> Dict[str, Any]:
         """
         Calculates active total stats.
         Passive Gu only grant stats if their hunger is >= 20% (not starving).
         """
+        self.update_stamina_passive()
         total_strength = self.base_strength
         total_defense = self.base_defense
         bonus_essence = 0
@@ -320,6 +337,8 @@ class CultivatorState:
             "primeval_essence": current_essence,
             "max_essence": max_essence,
             "aptitude_percentage": self.aptitude_percentage,
+            "stamina": round(self.stamina, 1),
+            "max_stamina": self.max_stamina,
             "nourish_progress": self.nourish_progress,
             "essence_multiplier": self.get_essence_multiplier(),
             "essence_color": self.get_essence_color(),
@@ -904,27 +923,27 @@ class CultivatorState:
             "cultivator": self.get_stats()
         }
 
-    def get_stage_multiplier(self) -> float:
+    def get_substage_index(self) -> int:
         st = self.stage.lower()
         if "peak" in st:
-            return 8.0
+            return 3
         elif "upper" in st:
-            return 4.0
+            return 2
         elif "middle" in st:
-            return 2.0
+            return 1
         else:
-            return 1.0
-
-    def get_rank_multiplier(self) -> float:
-        return 10.0 ** max(0, self.rank - 1)
+            return 0
 
     def get_essence_multiplier(self) -> float:
         """
-        Canonical Reverend Insanity Purity Multiplier Matrix:
-        Micro-stages: Initial (1x), Middle (2x), Upper (4x), Peak (8x)
-        Macro-stages (Ranks): Rank 1 (1x), Rank 2 (10x), Rank 3 (100x), Rank 4 (1000x), Rank 5 (10000x)
+        Exact Exponential Purity Formula:
+        substage_index: Initial (0), Middle (1), Upper (2), Peak (3)
+        multiplier = (80 ** (rank - 1)) * (2 ** substage_index)
+        - 2x increase per micro-stage
+        - 10x qualitative jump across major Ranks (e.g. Rank 1 Peak = 8x, Rank 2 Initial = 80x)
         """
-        return self.get_rank_multiplier() * self.get_stage_multiplier()
+        substage_index = self.get_substage_index()
+        return float((80 ** max(0, self.rank - 1)) * (2 ** substage_index))
 
     def calculate_essence_drain(self, beu_cost: float) -> float:
         """
@@ -983,9 +1002,10 @@ class CultivatorState:
     def nourish_aperture(self, drain_percentage: float = 30.0) -> Dict[str, Any]:
         """
         The Nourishment Loop (Micro-Progression):
-        Spend Primeval Essence to 'Wash the Aperture Walls'.
+        Spend Primeval Essence (30%) and Stamina (10) to 'Wash the Aperture Walls'.
         Yields 'Aperture Tempering Progress'. When reaching 100%, advances to next micro-stage.
         """
+        self.update_stamina_passive()
         st = self.stage.lower()
         if "peak" in st:
             return {
@@ -993,6 +1013,15 @@ class CultivatorState:
                 "message": "Peak Bottleneck Reached! The crystal aperture wall has reached its mortal limit for this Rank. Enter Closed Door Cultivation to Shatter the Aperture Wall.",
                 "stage": self.stage,
                 "nourish_progress": 100.0,
+                "cultivator": self.get_stats()
+            }
+
+        if self.stamina < 10.0:
+            return {
+                "success": False,
+                "message": f"Insufficient Stamina to wash the aperture walls! (Requires 10 Stamina, Current: {self.stamina:.1f}). Meditate or rest to recover.",
+                "stage": self.stage,
+                "nourish_progress": self.nourish_progress,
                 "cultivator": self.get_stats()
             }
 
@@ -1005,7 +1034,8 @@ class CultivatorState:
                 "cultivator": self.get_stats()
             }
 
-        # Deduct essence strictly
+        # Deduct stamina and essence strictly
+        self.stamina = max(0.0, round(self.stamina - 10.0, 1))
         self.primeval_essence = max(0.0, round(self.primeval_essence - drain_percentage, 2))
         
         # Add progress (34% per wash = 3 washes to advance)
@@ -1030,9 +1060,9 @@ class CultivatorState:
         self.essence_type = self.get_essence_type()
         
         if stage_promoted:
-            msg = f"✨ STAGE BREAKTHROUGH! By washing the aperture crystal walls, your essence has condensed! Advanced from {old_stage} to {self.stage} (Essence Multiplier: {self.get_essence_multiplier()}x)!"
+            msg = f"✨ STAGE BREAKTHROUGH! By washing the aperture crystal walls, your essence has condensed! Advanced from {old_stage} to {self.stage} (Essence Multiplier: {self.get_essence_multiplier():.0f}x)!"
         else:
-            msg = f"🌊 Aperture Washed! Drained {drain_percentage}% Primeval Essence to temper the crystal walls. Micro-stage progress: {self.nourish_progress}%."
+            msg = f"🌊 Aperture Washed! Drained {drain_percentage}% Primeval Essence and 10 Stamina to temper the crystal walls. Micro-stage progress: {self.nourish_progress}%."
 
         return {
             "success": True,
@@ -1041,6 +1071,51 @@ class CultivatorState:
             "stage": self.stage,
             "nourish_progress": self.nourish_progress,
             "essence_multiplier": self.get_essence_multiplier(),
+            "cultivator": self.get_stats()
+        }
+
+    def meditate(self, stamina_cost: float = 20.0) -> Dict[str, Any]:
+        """
+        The 'Meditate' (打坐调息) Action:
+        Instead of advancing global time, the player burns Stamina (20 Stamina)
+        to immediately trigger their innate recovery_rate, restoring Primeval Essence and HP.
+        """
+        self.update_stamina_passive()
+        
+        if self.stamina < stamina_cost:
+            return {
+                "success": False,
+                "message": f"Insufficient Stamina to enter deep meditation! (Requires {stamina_cost:.0f} Stamina, Current: {self.stamina:.1f}). Rest to recover stamina.",
+                "cultivator": self.get_stats()
+            }
+        
+        # Deduct Stamina
+        self.stamina = max(0.0, round(self.stamina - stamina_cost, 1))
+        
+        # Recovery rate calculations
+        old_essence = self.primeval_essence
+        essence_recovery = 30.0
+        self.primeval_essence = min(self.aptitude_percentage, round(self.primeval_essence + essence_recovery, 2))
+        actual_essence_restored = round(self.primeval_essence - old_essence, 2)
+        
+        max_hp = self.base_defense * 10
+        for gu in self.aperture:
+            if gu.get("gu_type") == "passive_body" and gu.get("hunger", 0) >= 20:
+                buff = gu.get("passive_buff")
+                if buff and buff.get("stat") == "defense":
+                    max_hp += buff.get("value", 0) * 10
+                    
+        old_hp = self.current_hp
+        hp_recovery = max(20, int(max_hp * 0.35))
+        self.current_hp = min(max_hp, self.current_hp + hp_recovery)
+        actual_hp_restored = self.current_hp - old_hp
+        
+        return {
+            "success": True,
+            "stamina_cost": stamina_cost,
+            "essence_restored": actual_essence_restored,
+            "hp_restored": actual_hp_restored,
+            "message": f"🧘 Deep Meditation Completed: Circulated primeval essence through your aperture and meridians. Spent {stamina_cost:.0f} Stamina. Restored +{actual_essence_restored:.1f}% Primeval Essence and +{actual_hp_restored} HP.",
             "cultivator": self.get_stats()
         }
 
