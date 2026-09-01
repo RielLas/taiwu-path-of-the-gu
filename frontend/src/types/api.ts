@@ -27,6 +27,17 @@ export interface StatDetail {
   modifiers: string[];
 }
 
+export interface KillerMove {
+  id: string;
+  name: string;
+  chinese_name?: string;
+  damage: number;
+  essence_cost: number;
+  description: string;
+  required_paths: string[];
+  active_gu_names?: string[];
+}
+
 export interface CultivatorStats {
   name: string;
   rank: number;
@@ -45,6 +56,7 @@ export interface CultivatorStats {
     defense: StatDetail;
     speed: number;
   };
+  killer_move?: KillerMove | null;
 }
 
 export interface GetApertureResponse {

@@ -145,13 +145,26 @@ async def move_player(
     terrain = current_tile["type"] if current_tile else "Wilderness"
     
     # Generate encounter
-    encounter = generate_tile_encounter(terrain)
-    
-    # If encounter has direct resource reward (spirit stones), auto add
-    reward_msg = ""
-    if encounter and encounter.get("type") == "resource":
-        amt = encounter.get("amount", 10)
-        player_cultivator.spirit_stones += amt
+    if current_tile and current_tile.get("is_spirit_spring"):
+        if not current_tile.get("harvested"):
+            encounter = generate_tile_encounter("Spirit Spring")
+            amt = encounter.get("amount", 75)
+            player_cultivator.spirit_stones += amt
+            current_tile["harvested"] = True
+        else:
+            encounter = {
+                "type": "resource",
+                "title": "Depleted Spirit Spring",
+                "desc": "The primeval spring waters are depleted for this expedition.",
+                "amount": 0,
+                "is_depleted": True
+            }
+    else:
+        encounter = generate_tile_encounter(terrain)
+        if encounter and encounter.get("type") == "resource":
+            amt = encounter.get("amount", 15)
+            player_cultivator.spirit_stones += amt
+
     # Hunger Attrition: Every movement on overworld grid deducts 5 satiety from all Gu (active & vaulted)
     starvation_alerts = player_cultivator.decay_gu_satiety(5)
 
@@ -165,7 +178,10 @@ async def move_player(
             "x": new_x,
             "y": new_y,
             "type": terrain,
-            "terrain": terrain
+            "terrain": terrain,
+            "biome": current_tile.get("biome", "Southern Border Mountain") if current_tile else "Southern Border Mountain",
+            "is_spirit_spring": current_tile.get("is_spirit_spring", False) if current_tile else False,
+            "harvested": current_tile.get("harvested", False) if current_tile else False
         },
         "event": encounter,
         "tiles": tiles,
@@ -174,14 +190,49 @@ async def move_player(
         "cultivator": cultivator_stats
     }
 
+@router.post("/harvest")
+async def harvest_node(payload: Dict[str, Any] = {}):
+    """
+    Directly claims resource rewards from the current tile/encounter (e.g. Spirit Springs).
+    """
+    pos = player_cultivator.player_pos
+    region_id = payload.get("region_id", 1)
+    tiles = get_or_create_region(region_id)
+    current_tile = next((t for t in tiles if t["x"] == pos[0] and t["y"] == pos[1]), None)
+    
+    stones_awarded = 0
+    if current_tile and current_tile.get("is_spirit_spring"):
+        if not current_tile.get("harvested"):
+            import random
+            stones_awarded = random.randint(50, 100)
+            player_cultivator.spirit_stones += stones_awarded
+            current_tile["harvested"] = True
+            msg = f"🌿 Harvested Spirit Spring for {stones_awarded} Primeval Stones!"
+        else:
+            msg = "This Spirit Spring has already been depleted."
+    else:
+        stones_awarded = 25
+        player_cultivator.spirit_stones += stones_awarded
+        msg = f"⛏️ Harvested resource vein for {stones_awarded} Primeval Stones!"
+        
+    return {
+        "success": True,
+        "message": msg,
+        "stones_awarded": stones_awarded,
+        "spirit_stones": player_cultivator.spirit_stones,
+        "cultivator": player_cultivator.get_stats(),
+        "tiles": tiles
+    }
+
 @router.post("/combat/action")
 async def combat_action(payload: Dict[str, Any]):
     """
-    Executes a combat turn and resolves actions.
+    Executes a combat turn and resolves actions, including Killer Move synergy strikes.
     When combat concludes (victory, defeat, or fled), deducts 5 satiety from all Gu.
     """
     action_type = payload.get("action_type", "strike")
     gu_id = payload.get("gu_id")
+    killer_id = payload.get("killer_id")
     enemy_hp = payload.get("enemy_hp", 50)
     enemy_atk = payload.get("enemy_atk", 15)
     reward_stones = payload.get("reward_stones", 15)
@@ -190,16 +241,32 @@ async def combat_action(payload: Dict[str, Any]):
     cultivator_stats = player_cultivator.get_stats()
     
     dmg_dealt = 0
+    action_log = ""
     if action_type == "strike":
         dmg_dealt = max(5, cultivator_stats["stats"]["strength"]["total"])
+        action_log = f"Dealt {dmg_dealt} martial damage with Basic Strike."
     elif action_type == "gu" and gu_id:
         gu = next((g for g in player_cultivator.aperture if g["id"] == gu_id), None)
         if gu:
             dmg_dealt = gu.get("active_power", 35)
             cost = gu.get("essence_cost", 10)
             player_cultivator.primeval_essence = max(0, player_cultivator.primeval_essence - cost)
+            action_log = f"Activated {gu['name']} dealing {dmg_dealt} damage (consumed {cost}% essence)!"
         else:
             dmg_dealt = 20
+            action_log = f"Dealt {dmg_dealt} damage."
+    elif action_type == "killer_move":
+        killer = player_cultivator.get_killer_move_synergy()
+        if killer:
+            dmg_dealt = killer["damage"]
+            cost = killer["essence_cost"]
+            player_cultivator.primeval_essence = max(0, player_cultivator.primeval_essence - cost)
+            action_log = f"⚡ UNLEASHED KILLER MOVE [{killer['name']}] dealing {dmg_dealt} CATASTROPHIC DAMAGE (consumed {cost}% essence)!"
+        else:
+            dmg_dealt = 180
+            cost = 35
+            player_cultivator.primeval_essence = max(0, player_cultivator.primeval_essence - cost)
+            action_log = f"⚡ Unleashed Composite Resonance Strike for {dmg_dealt} damage!"
 
     rem_enemy_hp = max(0, enemy_hp - dmg_dealt)
     dmg_taken = max(1, enemy_atk - (cultivator_stats["stats"]["defense"]["total"] // 2)) if rem_enemy_hp > 0 and action_type != "flee" else 0
@@ -229,7 +296,7 @@ async def combat_action(payload: Dict[str, Any]):
         "fled": fled,
         "starvation_alerts": starvation_alerts,
         "logs": [
-            f"Dealt {dmg_dealt} damage with {action_type}." if action_type != "flee" else "Attempting to escape...",
+            action_log if action_type != "flee" else "Attempting to escape the battlefield...",
             f"Enemy retaliated for {dmg_taken} damage!" if dmg_taken > 0 else ""
         ],
         "loot": {"stones": reward_stones} if is_victory else None,

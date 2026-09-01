@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { useCultivatorStore } from './useCultivator';
+import type { KillerMove } from '../types/api';
 
 export interface Enemy {
   id: string;
@@ -24,10 +25,11 @@ interface CombatStore {
   enemy: Enemy | null;
   logs: CombatLog[];
   loot: { stones: number; items?: any[] } | null;
+  killerMove: KillerMove | null;
   isProcessing: boolean;
 
   startCombat: (enemyName: string, enemyHp: number, enemyAtk: number, rewardStones: number) => void;
-  executeAction: (actionType: 'strike' | 'gu' | 'flee', guId?: string, guName?: string, power?: number, cost?: number) => Promise<void>;
+  executeAction: (actionType: 'strike' | 'gu' | 'killer_move' | 'flee', guId?: string, guName?: string, power?: number, cost?: number) => Promise<void>;
   endCombat: () => void;
 }
 
@@ -40,17 +42,89 @@ export const useCombatStore = create<CombatStore>((set, get) => ({
   enemy: null,
   logs: [],
   loot: null,
+  killerMove: null,
   isProcessing: false,
 
   startCombat: (enemyName, enemyHp, enemyAtk, rewardStones) => {
     const cultivator = useCultivatorStore.getState().cultivator;
+    const guWorms = useCultivatorStore.getState().guWorms;
+    
     // Calculate HP based on Defense body tempering
     const maxHp = cultivator ? cultivator.stats.defense.total * 10 : 250;
+    
+    // Check if cultivator has a killer move from backend or compute active synergy
+    let killerMove: KillerMove | null = cultivator?.killer_move || null;
+    if (!killerMove) {
+      const activeGu = guWorms.filter(g => g.gu_type === 'active');
+      const paths = activeGu.map(g => g.path.toLowerCase());
+      if (paths.some(p => p.includes('water')) && paths.some(p => p.includes('lightning'))) {
+        killerMove = {
+          id: 'killer_azure_thunder',
+          name: 'Thunderous Azure Deluge',
+          chinese_name: '雷霆碧浪',
+          damage: 220,
+          essence_cost: 45,
+          description: 'Combines torrential water currents with devastating lightning strikes to electrocute and vaporize the enemy!',
+          required_paths: ['Water Path', 'Lightning Path']
+        };
+      } else if (paths.some(p => p.includes('fire')) && paths.some(p => p.includes('wind'))) {
+        killerMove = {
+          id: 'killer_wildfire_tempest',
+          name: 'Wildfire Tempest',
+          chinese_name: '燎原风暴',
+          damage: 240,
+          essence_cost: 50,
+          description: 'Howling winds fuel surging flames into a celestial vortex of total incineration!',
+          required_paths: ['Fire Path', 'Wind Path']
+        };
+      } else if (paths.some(p => p.includes('blood')) && (paths.some(p => p.includes('strength')) || paths.some(p => p.includes('moon')))) {
+        killerMove = {
+          id: 'killer_blood_moon_cleave',
+          name: 'Blood-Boiling Crimson Crescent',
+          chinese_name: '沸血残月斩',
+          damage: 250,
+          essence_cost: 40,
+          description: 'Ignites mortal lifeblood to empower the Moonlight blade into a terrifying 250 DMG crescent of pure carnage!',
+          required_paths: ['Blood Path', 'Moon Path / Strength Path']
+        };
+      } else if (paths.some(p => p.includes('light')) && paths.some(p => p.includes('moon'))) {
+        killerMove = {
+          id: 'killer_celestial_radiance',
+          name: 'Celestial Radiance Flash',
+          chinese_name: '日月凌空闪',
+          damage: 210,
+          essence_cost: 35,
+          description: 'Harmonizes solar light particles with lunar curved blades for an unavoidable flash strike!',
+          required_paths: ['Light Path', 'Moon Path']
+        };
+      } else if (activeGu.length >= 3) {
+        killerMove = {
+          id: 'killer_tri_annihilation',
+          name: 'Tri-Aperture Annihilation Surge',
+          chinese_name: '三才寂灭狂潮',
+          damage: 300,
+          essence_cost: 55,
+          description: 'Forces all three active combat Gu to resonate simultaneously in supreme tripartite harmony, unleashing an apocalyptic shockwave of Dao marks!',
+          required_paths: ['3 Active Gu Resonance']
+        };
+      } else if (activeGu.length >= 2) {
+        killerMove = {
+          id: 'killer_dual_resonance',
+          name: 'Dual Aperture Resonance Strike',
+          chinese_name: '双元共鸣裂',
+          damage: 175,
+          essence_cost: 30,
+          description: 'Channels two active Gu in simultaneous harmonic resonance to deal amplified composite damage!',
+          required_paths: ['2 Active Gu Resonance']
+        };
+      }
+    }
     
     set({
       isActive: true,
       playerHp: maxHp,
       playerMaxHp: maxHp,
+      killerMove: killerMove,
       enemy: {
         id: `enemy_${Date.now()}`,
         name: enemyName,
@@ -81,29 +155,36 @@ export const useCombatStore = create<CombatStore>((set, get) => ({
     let actionLog = '';
     if (actionType === 'flee') actionLog = 'You attempt to flee the battlefield...';
     else if (actionType === 'strike') actionLog = 'You launch a basic martial strike!';
+    else if (actionType === 'killer_move') actionLog = `⚡ UNLEASHED SUPREME KILLER MOVE [${guName}], consuming ${cost}% essence!`;
     else actionLog = `You activate ${guName}, consuming ${cost}% essence!`;
 
     set(s => ({ logs: [...s.logs, { id: `${logId}_1`, message: actionLog, type: 'player_atk' }] }));
 
     try {
-      // 1. Dispatch action to hypothetical backend combat endpoint
+      // 1. Dispatch action to backend combat endpoint
       const res = await fetch(`${API_BASE}/combat/action`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action_type: actionType,
           gu_id: guId,
-          enemy_id: state.enemy.id
+          killer_id: guId,
+          enemy_id: state.enemy.id,
+          enemy_hp: state.enemy.hp,
+          enemy_atk: state.enemy.atk,
+          reward_stones: state.enemy.reward_stones,
+          player_hp: state.playerHp
         })
       });
 
       let data;
       if (res.ok) {
         data = await res.json();
+        if (data.cultivator) {
+          useCultivatorStore.setState({ cultivator: data.cultivator });
+        }
       } else {
         // --- FALLBACK SIMULATION ---
-        // Since the Python backend /combat/action endpoint isn't built yet, we simulate the contract here 
-        // to ensure the UI is fully functional and testable immediately.
         await new Promise(resolve => setTimeout(resolve, 800)); // Artificial network delay
         
         const cultivatorStore = useCultivatorStore.getState();
@@ -114,7 +195,13 @@ export const useCombatStore = create<CombatStore>((set, get) => ({
           dmgDealt = Math.max(1, (cultivator?.stats.strength.total || 10) - (state.enemy.rank * 5));
         } else if (actionType === 'gu' && power && cost) {
           dmgDealt = power;
-          // Optimistically drain essence locally
+          if (cultivator) {
+             useCultivatorStore.setState({ 
+               cultivator: { ...cultivator, primeval_essence: Math.max(0, cultivator.primeval_essence - cost) }
+             });
+          }
+        } else if (actionType === 'killer_move' && power && cost) {
+          dmgDealt = power;
           if (cultivator) {
              useCultivatorStore.setState({ 
                cultivator: { ...cultivator, primeval_essence: Math.max(0, cultivator.primeval_essence - cost) }

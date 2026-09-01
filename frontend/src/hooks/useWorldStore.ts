@@ -28,6 +28,10 @@ export interface WorldNode {
   x: number;
   y: number;
   type: string;
+  terrain?: string;
+  biome?: string;
+  is_spirit_spring?: boolean;
+  harvested?: boolean;
   is_revealed: boolean;
   discovered: boolean;
 }

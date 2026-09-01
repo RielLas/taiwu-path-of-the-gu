@@ -2,6 +2,11 @@ import random
 from typing import List, Dict, Any, Optional
 
 BIOMES = [
+    "Southern Border Mountain",
+    "Northern Plains Grassland",
+    "Eastern Sea Reef",
+    "Western Desert Dunes",
+    "Central Continent Plains",
     "Bamboo Forest",
     "Venom Swamp",
     "Ancient Ruins",
@@ -11,35 +16,59 @@ BIOMES = [
     "Blood Mountain"
 ]
 
+REGION_BIOMES = {
+    1: "Southern Border Mountain",
+    2: "Central Continent Plains",
+    3: "Ancient Ruins",
+    4: "Northern Plains Grassland",
+    5: "Eastern Sea Reef"
+}
+
 def generate_region(region_id: int, width: int = 15, height: int = 15, player_start: List[int] = [7, 7]) -> List[Dict[str, Any]]:
     """
-    Procedurally generates a grid of tiles for a region with consistent seed.
-    Reveals tiles in a 3x3 radius around player_start by default.
+    Procedurally generates a 15x15 grid of tiles for a region with consistent seed,
+    assigning biomes to terrain sectors and injecting static Spirit Spring resource nodes.
     """
     tiles = []
     random.seed(region_id)
     
-    dominant_biome = random.choice(BIOMES)
-    
+    dominant_biome = REGION_BIOMES.get(region_id, random.choice(BIOMES))
     px, py = player_start
+    
+    # Pre-determine static Spirit Spring locations (e.g. 2 static springs per region)
+    # Guaranteed not to spawn directly on the player start position [7, 7]
+    spring_coords = set([
+        ((px + 3) % width, (py - 3) % height),
+        ((px - 4) % width, (py + 4) % height)
+    ])
     
     for y in range(height):
         for x in range(width):
             if (x, y) == (px, py):
                 terrain = "Sect Grounds"
-            elif random.random() < 0.65:
+                tile_biome = dominant_biome
+            elif (x, y) in spring_coords:
+                terrain = "Spirit Spring"
+                tile_biome = dominant_biome
+            elif random.random() < 0.60:
                 terrain = dominant_biome
+                tile_biome = dominant_biome
             else:
                 terrain = random.choice(BIOMES)
+                tile_biome = terrain if terrain in REGION_BIOMES.values() else dominant_biome
                 
             # Initial fog of war: reveal tiles within distance 1 of player start
             is_revealed = abs(x - px) <= 1 and abs(y - py) <= 1
+            is_spring = terrain == "Spirit Spring"
             
             tile = {
                 "x": x,
                 "y": y,
                 "type": terrain,
                 "terrain": terrain,
+                "biome": tile_biome,
+                "is_spirit_spring": is_spring,
+                "harvested": False,
                 "is_revealed": is_revealed,
                 "discovered": is_revealed
             }
@@ -49,13 +78,130 @@ def generate_region(region_id: int, width: int = 15, height: int = 15, player_st
 
 def generate_tile_encounter(terrain: str) -> Optional[Dict[str, Any]]:
     """
-    Generates a context-rich Reverend Insanity style encounter based on terrain.
+    Generates a context-rich Reverend Insanity style encounter based on terrain/biome.
     """
+    # Spirit Springs always trigger a guaranteed encounter if not depleted
+    if terrain == "Spirit Spring":
+        stones_amount = random.randint(50, 100)
+        return {
+            "type": "resource",
+            "title": "Natural Jade Spirit Spring",
+            "desc": f"A crystalline jade aperture fissure gushes with concentrated primeval liquid! You harvest a massive bounty of {stones_amount} Primeval Stones.",
+            "reward_type": "spirit_stones",
+            "amount": stones_amount,
+            "is_spirit_spring": True
+        }
+        
     roll = random.random()
     if roll > 0.40:
         return None  # 60% peaceful exploration
         
     encounter_tables = {
+        "Southern Border Mountain": [
+            {
+                "type": "resource",
+                "title": "Mountain Jade Cache",
+                "desc": "Beneath a craggy precipice, you uncover an exposed pocket of primeval ore (+45 Primeval Stones).",
+                "reward_type": "spirit_stones",
+                "amount": 45
+            },
+            {
+                "type": "combat",
+                "title": "Fierce Mountain Boar",
+                "desc": "A heavy stone-tusked boar roars and charges to defend its territory!",
+                "enemy_name": "Stone Tusk Boar (Rank 1)",
+                "enemy_hp": 80,
+                "enemy_atk": 22,
+                "reward_stones": 30
+            },
+            {
+                "type": "wild_gu",
+                "title": "Wild Mountain Gu",
+                "desc": "A wild Mountain Boar Gu is foraging among the cliff roots.",
+                "action": "capture",
+                "wild_gu": {
+                    "name": "Black Boar Gu",
+                    "tier": 1,
+                    "path": "Strength Path",
+                    "gu_type": "passive_body",
+                    "food": "Raw Pork",
+                    "effect_desc": "Infuses the sinews with brute beast strength (+15 Strength).",
+                    "passive_buff": {"stat": "strength", "value": 15, "label": "1 Boar Strength"}
+                }
+            }
+        ],
+        "Northern Plains Grassland": [
+            {
+                "type": "combat",
+                "title": "Roaming Plains Wolf",
+                "desc": "A fierce grassland silver wolf snarls as it stalks you through the tall reeds!",
+                "enemy_name": "Grassland Silver Wolf",
+                "enemy_hp": 70,
+                "enemy_atk": 25,
+                "reward_stones": 25
+            },
+            {
+                "type": "resource",
+                "title": "Nomadic Trader Stash",
+                "desc": "You discover an abandoned nomadic caravan stash with 40 Primeval Stones.",
+                "reward_type": "spirit_stones",
+                "amount": 40
+            }
+        ],
+        "Eastern Sea Reef": [
+            {
+                "type": "resource",
+                "title": "Tidal Pearl Deposit",
+                "desc": "Crashing tides have washed ashore luminous primeval pearl deposits (+50 Primeval Stones).",
+                "reward_type": "spirit_stones",
+                "amount": 50
+            },
+            {
+                "type": "combat",
+                "title": "Reef Crab Monstrosity",
+                "desc": "An armored tidal crab snaps its razor claws aggressively!",
+                "enemy_name": "Tidal Iron Crab",
+                "enemy_hp": 90,
+                "enemy_atk": 20,
+                "reward_stones": 35
+            }
+        ],
+        "Western Desert Dunes": [
+            {
+                "type": "combat",
+                "title": "Dune Scorpion Ambush",
+                "desc": "A venomous giant sand scorpion bursts out of the golden sand dunes!",
+                "enemy_name": "Golden Sand Scorpion",
+                "enemy_hp": 75,
+                "enemy_atk": 28,
+                "reward_stones": 30
+            },
+            {
+                "type": "resource",
+                "title": "Ancient Desert Oasis",
+                "desc": "A hidden oasis springs forth from the arid dunes, yielding 45 Primeval Stones.",
+                "reward_type": "spirit_stones",
+                "amount": 45
+            }
+        ],
+        "Central Continent Plains": [
+            {
+                "type": "resource",
+                "title": "Central Clan Tribute",
+                "desc": "You intercept a merchant convoy tribute containing 50 Primeval Stones.",
+                "reward_type": "spirit_stones",
+                "amount": 50
+            },
+            {
+                "type": "combat",
+                "title": "Central Sect Enforcer",
+                "desc": "An arrogant sect enforcer demands your Gu or your life!",
+                "enemy_name": "Sect Enforcer (Rank 1 Peak)",
+                "enemy_hp": 85,
+                "enemy_atk": 26,
+                "reward_stones": 35
+            }
+        ],
         "Bamboo Forest": [
             {
                 "type": "wild_gu",
@@ -75,9 +221,9 @@ def generate_tile_encounter(terrain: str) -> Optional[Dict[str, Any]]:
             {
                 "type": "resource",
                 "title": "Natural Spirit Spring",
-                "desc": "A crack in the mossy ground gushes with pure primeval dew. You harvest 15 Primeval Stones.",
+                "desc": "A crack in the mossy ground gushes with pure primeval dew. You harvest 25 Primeval Stones.",
                 "reward_type": "spirit_stones",
-                "amount": 15
+                "amount": 25
             }
         ],
         "Mountain Pass": [
@@ -143,9 +289,9 @@ def generate_tile_encounter(terrain: str) -> Optional[Dict[str, Any]]:
             {
                 "type": "resource",
                 "title": "Inheritance Stash",
-                "desc": "You uncover a concealed compartment containing 30 ancient Primeval Stones.",
+                "desc": "You uncover a concealed compartment containing 40 ancient Primeval Stones.",
                 "reward_type": "spirit_stones",
-                "amount": 30
+                "amount": 40
             }
         ],
         "Blood Mountain": [
@@ -156,7 +302,7 @@ def generate_tile_encounter(terrain: str) -> Optional[Dict[str, Any]]:
                 "enemy_name": "Blood Wolf Beast",
                 "enemy_hp": 75,
                 "enemy_atk": 30,
-                "reward_stones": 20
+                "reward_stones": 30
             }
         ],
         "Sect Grounds": [
@@ -165,16 +311,16 @@ def generate_tile_encounter(terrain: str) -> Optional[Dict[str, Any]]:
                 "title": "Clan Monthly Stipend",
                 "desc": "You visit the Clan Resource Pavilion and receive your Rank 1 Cultivator allowance.",
                 "reward_type": "spirit_stones",
-                "amount": 10
+                "amount": 20
             }
         ],
         "Spirit Veins": [
             {
                 "type": "resource",
                 "title": "Exposed Spirit Vein Ore",
-                "desc": "You mine raw primeval ore from the natural vein (+20 Primeval Stones).",
+                "desc": "You mine raw primeval ore from the natural vein (+35 Primeval Stones).",
                 "reward_type": "spirit_stones",
-                "amount": 20
+                "amount": 35
             }
         ]
     }
@@ -185,7 +331,7 @@ def generate_tile_encounter(terrain: str) -> Optional[Dict[str, Any]]:
             "title": "Found Primeval Stones",
             "desc": "You scavenge several loose primeval stones hidden beneath the rocks.",
             "reward_type": "spirit_stones",
-            "amount": 10
+            "amount": 15
         }
     ])
     

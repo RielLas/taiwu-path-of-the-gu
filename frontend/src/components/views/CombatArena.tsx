@@ -4,7 +4,7 @@ import { useCultivatorStore } from '../../hooks/useCultivator';
 
 export default function CombatArena() {
   const { 
-    isActive, playerHp, playerMaxHp, enemy, logs, loot, isProcessing, 
+    isActive, playerHp, playerMaxHp, enemy, logs, loot, killerMove, isProcessing, 
     executeAction, endCombat 
   } = useCombatStore();
   
@@ -148,6 +148,47 @@ export default function CombatArena() {
 
       {/* BOTTOM: Tactical Action Bar */}
       <div className="w-full max-w-6xl mt-4 mb-4 pb-4">
+        
+        {/* Supreme Synergy: Killer Move Action Banner */}
+        {!isCombatOver && killerMove && (
+          <div className="mb-4 p-4 rounded-2xl bg-gradient-to-r from-red-950/90 via-[#24130d] to-red-950/90 border-2 border-[#c89b3c] shadow-[0_0_30px_rgba(200,155,60,0.3)] flex flex-col md:flex-row items-center justify-between gap-4 animate-slide-up">
+            <div className="text-left flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-[10px] uppercase tracking-[0.25em] text-[#c89b3c] font-sans font-bold">
+                  ⚡ Active Dao Synergy Unlocked
+                </span>
+                <span className="text-[9px] bg-red-950/90 border border-red-500 text-red-300 px-2 py-0.5 rounded font-mono font-bold uppercase">
+                  Killer Move
+                </span>
+              </div>
+              <h4 className="text-lg md:text-xl font-bold text-[#d5cfc4] tracking-wider">
+                {killerMove.name} {killerMove.chinese_name ? `(${killerMove.chinese_name})` : ''}
+              </h4>
+              <p className="text-xs text-[#8a8275] font-sans mt-0.5 leading-relaxed">
+                {killerMove.description}
+              </p>
+            </div>
+
+            <div className="shrink-0 flex flex-col items-center">
+              <button
+                onClick={() => executeAction('killer_move', killerMove.id, killerMove.name, killerMove.damage, killerMove.essence_cost)}
+                disabled={isProcessing || currentEssence < killerMove.essence_cost}
+                className={`py-3.5 px-6 md:px-8 rounded-xl font-sans text-xs md:text-sm font-bold uppercase tracking-[0.2em] transition-all duration-300 shadow-2xl border ${
+                  currentEssence >= killerMove.essence_cost && !isProcessing
+                    ? 'bg-gradient-to-r from-red-600 via-amber-600 to-red-800 text-white hover:brightness-125 hover:shadow-[0_0_30px_rgba(239,68,68,0.8)] border-[#c89b3c] cursor-pointer hover:scale-105 active:scale-95'
+                    : 'bg-[#1a1814] text-zinc-600 border-[#2a2620] cursor-not-allowed opacity-50'
+                }`}
+              >
+                ⚡ EXECUTE KILLER MOVE ({killerMove.damage} DMG • {killerMove.essence_cost}% Ess)
+              </button>
+              {currentEssence < killerMove.essence_cost && (
+                <span className="text-[10px] text-red-400 font-sans mt-1 text-center">
+                  Requires {killerMove.essence_cost}% Essence (Have {currentEssence}%)
+                </span>
+              )}
+            </div>
+          </div>
+        )}
         {isCombatOver ? (
           <div className={`glass-card bg-[#12100d] border p-6 rounded-2xl text-center shadow-2xl animate-slide-up ${
             isVictory ? 'border-[#c89b3c] shadow-[0_0_30px_rgba(200,155,60,0.2)]' : 'border-red-600 shadow-[0_0_30px_rgba(220,38,38,0.4)]'

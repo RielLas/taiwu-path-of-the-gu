@@ -10,12 +10,23 @@ interface MapGridProps {
   onExitNode?: () => void;
 }
 
-const BIOME_STYLES: Record<string, { bg: string; icon: string; border: string }> = {
+const BIOME_STYLES: Record<string, { bg: string; icon: string; border: string; glow?: string }> = {
+  'Spirit Spring': { 
+    bg: 'bg-gradient-to-br from-emerald-950 via-teal-900 to-emerald-700', 
+    icon: '💎', 
+    border: 'border-2 border-emerald-400 animate-pulse', 
+    glow: 'shadow-[0_0_25px_rgba(52,211,153,0.9)] ring-2 ring-emerald-400/80' 
+  },
+  'Southern Border Mountain': { bg: 'bg-[#2b1f16]', icon: '⛰️', border: 'border-amber-800/60' },
+  'Northern Plains Grassland': { bg: 'bg-[#1b2b1a]', icon: '🌾', border: 'border-emerald-800/60' },
+  'Eastern Sea Reef': { bg: 'bg-[#122830]', icon: '🌊', border: 'border-cyan-700/60' },
+  'Western Desert Dunes': { bg: 'bg-[#3b2d15]', icon: '🏜️', border: 'border-yellow-700/60' },
+  'Central Continent Plains': { bg: 'bg-[#1e1c24]', icon: '🏛️', border: 'border-purple-800/60' },
   'Bamboo Forest': { bg: 'bg-[#1e3a2b]', icon: '🎋', border: 'border-emerald-700/50' },
   'Venom Swamp': { bg: 'bg-[#2d1b36]', icon: '☠️', border: 'border-purple-800/50' },
   'Ancient Ruins': { bg: 'bg-[#2b2b2b]', icon: '🏛️', border: 'border-amber-900/50' },
   'Sect Grounds': { bg: 'bg-[#1b2a38]', icon: '🏯', border: 'border-sky-800/50' },
-  'Spirit Veins': { bg: 'bg-[#163832]', icon: '💎', border: 'border-teal-700/50' },
+  'Spirit Veins': { bg: 'bg-[#163832]', icon: '⛏️', border: 'border-teal-700/50' },
   'Mountain Pass': { bg: 'bg-[#3b2d1d]', icon: '⛰️', border: 'border-amber-800/50' },
   'Blood Mountain': { bg: 'bg-[#3f1617]', icon: '🩸', border: 'border-red-800/50' },
   'Wilderness': { bg: 'bg-[#1a2318]', icon: '🌲', border: 'border-[#3b4d3c]/30' }
@@ -56,7 +67,7 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
         setEncounterResult(null);
       }
 
-      // Sync cultivator essence if it changed due to movement
+      // Sync cultivator essence and stones
       fetchAperture();
     } catch (err: any) {
       setLogs(prev => [...prev, `> Movement Error: ${err.message}`]);
@@ -106,8 +117,6 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
     // Clear the map encounter overlay since the CombatArena will take over
     setActiveEncounter(null);
   };
-
-  console.log('Grid Data:', grid);
 
   return (
     <div className="absolute inset-0 bg-[#12100d] z-40 flex flex-col md:flex-row font-serif overflow-hidden select-none">
@@ -190,7 +199,10 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
                     {grid.map((tile, idx) => {
                       const isPlayerHere = tile.x === playerLocation.x && tile.y === playerLocation.y;
                       const isAdjacent = Math.abs(tile.x - playerLocation.x) <= 1 && Math.abs(tile.y - playerLocation.y) <= 1 && !isPlayerHere;
-                      const style = BIOME_STYLES[tile.type] || BIOME_STYLES['Wilderness'];
+                      
+                      const isSpring = tile.type === 'Spirit Spring' || tile.terrain === 'Spirit Spring' || tile.is_spirit_spring;
+                      const styleKey = isSpring ? 'Spirit Spring' : (tile.type || tile.terrain || tile.biome || 'Wilderness');
+                      const style = BIOME_STYLES[styleKey] || (tile.biome ? BIOME_STYLES[tile.biome] : undefined) || BIOME_STYLES['Wilderness'];
 
                       return (
                         <div
@@ -200,10 +212,11 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
                             relative w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 aspect-square border rounded flex items-center justify-center transition-all duration-300
                             ${!tile.discovered ? 'bg-[#0a0907] border-[#1a1814]' : `${style.bg} ${style.border}`}
                             ${!tile.discovered ? 'opacity-35' : 'opacity-100 shadow-lg'}
+                            ${isSpring && tile.discovered ? (style.glow || '') : ''}
                             ${isPlayerHere ? 'ring-2 ring-[#c89b3c] shadow-[0_0_25px_rgba(200,155,60,0.9)] z-30 scale-110' : ''}
                             ${isAdjacent ? 'cursor-pointer hover:border-[#c89b3c] hover:scale-105 hover:z-20 animate-pulse border-gold/40' : 'cursor-default'}
                           `}
-                          title={`${tile.type} (${tile.x}, ${tile.y})`}
+                          title={`${isSpring ? 'Natural Jade Spirit Spring' : tile.type} (${tile.x}, ${tile.y})`}
                           style={{ transformStyle: 'preserve-3d' }}
                         >
                           {/* Billboard / Counter-Rotate Icon Container */}
@@ -222,7 +235,7 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
                                 <div className="w-3 h-1 bg-[#c89b3c]/60 rounded-full blur-[1px] mt-0.5"></div>
                               </div>
                             ) : tile.discovered ? (
-                              <span className="text-sm md:text-base opacity-80 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
+                              <span className={`text-sm md:text-base opacity-90 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] ${isSpring ? 'scale-125 animate-bounce' : ''}`}>
                                 {style.icon}
                               </span>
                             ) : null}

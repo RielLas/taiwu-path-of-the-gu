@@ -209,8 +209,115 @@ class CultivatorState:
                     "modifiers": defense_modifiers
                 },
                 "speed": self.base_speed
-            }
+            },
+            "killer_move": self.get_killer_move_synergy()
         }
+
+    def get_killer_move_synergy(self) -> Optional[Dict[str, Any]]:
+        """
+        Analyzes the player's equipped 'active' Gu worms in the Primeval Aperture.
+        If compatible paths are equipped simultaneously, unlocks a composite Killer Move.
+        Deals exponential damage but consumes heavy primeval essence.
+        """
+        active_gu = [g for g in self.aperture if g.get("gu_type") == "active"]
+        if not active_gu:
+            return None
+            
+        paths = [g.get("path", "").lower() for g in active_gu]
+        names = [g.get("name", "") for g in active_gu]
+        
+        # 1. Water Path + Lightning Path
+        if any("water" in p for p in paths) and any("lightning" in p for p in paths):
+            return {
+                "id": "killer_azure_thunder",
+                "name": "Thunderous Azure Deluge",
+                "chinese_name": "雷霆碧浪",
+                "damage": 220,
+                "essence_cost": 45,
+                "description": "Combines torrential water currents with devastating lightning strikes to electrocute and vaporize the enemy!",
+                "required_paths": ["Water Path", "Lightning Path"],
+                "active_gu_names": names
+            }
+            
+        # 2. Fire Path + Wind Path
+        if any("fire" in p for p in paths) and any("wind" in p for p in paths):
+            return {
+                "id": "killer_wildfire_tempest",
+                "name": "Wildfire Tempest",
+                "chinese_name": "燎原风暴",
+                "damage": 240,
+                "essence_cost": 50,
+                "description": "Howling winds fuel surging flames into a celestial vortex of total incineration!",
+                "required_paths": ["Fire Path", "Wind Path"],
+                "active_gu_names": names
+            }
+            
+        # 3. Blood Path + Strength Path / Moon Path
+        if any("blood" in p for p in paths) and (any("strength" in p for p in paths) or any("moon" in p for p in paths)):
+            return {
+                "id": "killer_blood_moon_cleave",
+                "name": "Blood-Boiling Crimson Crescent",
+                "chinese_name": "沸血残月斩",
+                "damage": 250,
+                "essence_cost": 40,
+                "description": "Ignites mortal lifeblood to empower the Moonlight blade into a terrifying 250 DMG crescent of pure carnage!",
+                "required_paths": ["Blood Path", "Moon Path / Strength Path"],
+                "active_gu_names": names
+            }
+            
+        # 4. Poison Path + Fire Path / Blood Path
+        if any("poison" in p for p in paths) and (any("fire" in p for p in paths) or any("blood" in p for p in paths)):
+            return {
+                "id": "killer_toxic_conflagration",
+                "name": "Toxic Smog Conflagration",
+                "chinese_name": "剧毒爆炎",
+                "damage": 230,
+                "essence_cost": 45,
+                "description": "Detonates corrosive poisonous venom into a violent acidic inferno!",
+                "required_paths": ["Poison Path", "Fire/Blood Path"],
+                "active_gu_names": names
+            }
+            
+        # 5. Light Path + Moon Path
+        if any("light" in p for p in paths) and any("moon" in p for p in paths):
+            return {
+                "id": "killer_celestial_radiance",
+                "name": "Celestial Radiance Flash",
+                "chinese_name": "日月凌空闪",
+                "damage": 210,
+                "essence_cost": 35,
+                "description": "Harmonizes solar light particles with lunar curved blades for an unavoidable flash strike!",
+                "required_paths": ["Light Path", "Moon Path"],
+                "active_gu_names": names
+            }
+            
+        # 6. Tri-Aperture Synergy (Any 3 active Gu equipped simultaneously)
+        if len(active_gu) >= 3:
+            return {
+                "id": "killer_tri_annihilation",
+                "name": "Tri-Aperture Annihilation Surge",
+                "chinese_name": "三才寂灭狂潮",
+                "damage": 300,
+                "essence_cost": 55,
+                "description": "Forces all three active combat Gu to resonate simultaneously in supreme tripartite harmony, unleashing an apocalyptic shockwave of Dao marks!",
+                "required_paths": ["3 Active Gu Resonance"],
+                "active_gu_names": names
+            }
+            
+        # 7. Dual Active Gu composite resonance (Any 2 active Gu equipped)
+        if len(active_gu) >= 2:
+            return {
+                "id": "killer_dual_resonance",
+                "name": "Dual Aperture Resonance Strike",
+                "chinese_name": "双元共鸣裂",
+                "damage": 175,
+                "essence_cost": 30,
+                "description": "Channels two active Gu in simultaneous harmonic resonance to deal amplified composite damage!",
+                "required_paths": ["2 Active Gu Resonance"],
+                "active_gu_names": names
+            }
+            
+        return None
 
     def attempt_ascension(self) -> Dict[str, Any]:
         """
