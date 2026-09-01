@@ -487,12 +487,55 @@ class CultivatorState:
 
     def generate_procedural_title(self, total_strength: int, total_defense: int, dao_marks: Dict[str, int]) -> str:
         """
-        Procedural Titles:
-        Dynamically generates active titles and aliases based on cultivator stats, karma/alignment, and Dao marks.
+        Title Hierarchy Engine (Dao Marks > Body Tempering > Baseline Alignment):
+        Strictly enforces Dao Mark titles as absolute highest priority.
+        Body tempering and raw attribute titles are secondary.
+        Rank and karmic alignment titles act as baseline fallbacks.
         """
         alignment = self.alignment_score
         
-        # 1. Strength & Transformation Path Titles
+        # ─── PRIORITY 1: DAO MARKS (Absolute Highest Weight) ───────────────────
+        time_marks = dao_marks.get("Time (Chrono) Path", 0)
+        blood_marks = dao_marks.get("Blood Path", 0)
+        moon_marks = dao_marks.get("Moon Path", 0)
+        poison_marks = dao_marks.get("Poison Path", 0)
+        transform_marks = dao_marks.get("Transformation Path", 0)
+        water_marks = dao_marks.get("Water Path", 0)
+        light_marks = dao_marks.get("Light Path", 0)
+
+        # High priority Dao Mark titles
+        if blood_marks >= 10:
+            if alignment <= -50:
+                return "Blood-Sea Demonic Scourge"
+            elif alignment > 20:
+                return "Crimson Blade Avenger"
+            else:
+                return "Scarlet Dao Ascetic"
+                
+        if moon_marks >= 10:
+            if alignment <= -50:
+                return "Desolate Moon Fiend"
+            elif alignment > 20:
+                return "Ethereal Moonlight Scholar"
+            else:
+                return "Cold-Blooded Moonblade"
+
+        if poison_marks >= 15:
+            return "Venom-Heart Demonic Fiend" if alignment <= -30 else "Ashen Serpent Alchemist"
+
+        if transform_marks >= 20:
+            return "Myriad Beast Chimera Fiend" if alignment <= -30 else "Shapeshifting Paragon"
+
+        if water_marks >= 15:
+            return "Azure Tide Wanderer"
+
+        if light_marks >= 15:
+            return "Radiant Sun Sovereign" if alignment > 20 else "Blinding Flash Stalker"
+
+        if time_marks >= 500:
+            return "Spring Autumn Chrono-Demon" if alignment <= -50 else "Reincarnating Chrono-Wanderer"
+
+        # ─── PRIORITY 2: BODY TEMPERING & RAW STATS (Secondary) ────────────────
         if total_strength >= 30:
             if alignment <= -50:
                 return "Demonic Boar-Fist"
@@ -505,34 +548,16 @@ class CultivatorState:
                 return "Impervious Blood-Armor"
             else:
                 return "Steel-Skin Vanguard"
-                
-        # 2. Dao Mark Path Titles
-        blood_marks = dao_marks.get("Blood Path", 0)
-        moon_marks = dao_marks.get("Moon Path", 0)
-        water_marks = dao_marks.get("Water Path", 0)
-        
-        if blood_marks >= 10:
-            if alignment <= -50:
-                return "Blood-Sea Demonic Scourge"
-            else:
-                return "Crimson Blade Avenger"
-        if moon_marks >= 10:
-            if alignment <= -50:
-                return "Desolate Moon Fiend"
-            elif alignment > 20:
-                return "Ethereal Moonlight Scholar"
-            else:
-                return "Cold-Blooded Moonblade"
-        if water_marks >= 10:
-            return "Azure Tide Wanderer"
+        elif self.base_speed >= 20:
+            return "Phantom-Step Demon" if alignment <= -50 else "Gale-Striding Courier"
             
-        # 3. Baseline Titles based on Rank and Alignment
+        # ─── PRIORITY 3: BASELINE RANK & ALIGNMENT (Fallback) ──────────────────
         if alignment <= -50:
-            return "Demonic Scoundrel" if self.rank == 1 else "Rank 2 Demonic Elder"
+            return "Demonic Scoundrel" if self.rank == 1 else f"Rank {self.rank} Demonic Elder"
         elif alignment > 30:
-            return "Righteous Disciple" if self.rank == 1 else "Righteous Clan Master"
+            return "Righteous Disciple" if self.rank == 1 else f"Rank {self.rank} Righteous Patriarch"
         else:
-            return "Solitary Wanderer"
+            return "Solitary Wanderer" if self.rank == 1 else f"Rank {self.rank} Free-Spirited Nomad"
 
     def get_killer_move_synergy(self) -> Optional[Dict[str, Any]]:
         """

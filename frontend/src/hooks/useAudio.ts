@@ -6,7 +6,7 @@
 // Singleton Web Audio Context
 let audioCtx: AudioContext | null = null;
 
-function getAudioContext(): AudioContext | null {
+export function getAudioContext(): AudioContext | null {
   if (typeof window === 'undefined') return null;
   if (!audioCtx) {
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
@@ -18,6 +18,24 @@ function getAudioContext(): AudioContext | null {
     audioCtx.resume().catch(() => {});
   }
   return audioCtx;
+}
+
+/**
+ * Unlocks the Web Audio API context upon user gesture
+ */
+export async function unlockAudioContext(): Promise<boolean> {
+  const ctx = getAudioContext();
+  if (!ctx) return false;
+  try {
+    if (ctx.state === 'suspended') {
+      await ctx.resume();
+    }
+    playBrushSound();
+    return true;
+  } catch (e) {
+    console.debug('Failed to unlock audio context', e);
+    return false;
+  }
 }
 
 /**
