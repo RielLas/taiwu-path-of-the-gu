@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useVaultStore } from '../../hooks/useVault';
 import { useCultivatorStore } from '../../hooks/useCultivator';
+import { playJadeClinkSound } from '../../hooks/useAudio';
 import type { GuWorm } from '../../types/api';
 
 export default function GuVault() {
@@ -13,6 +14,11 @@ export default function GuVault() {
   useEffect(() => {
     fetchVault();
   }, [fetchVault]);
+
+  const handleFeed = async (guId: string) => {
+    playJadeClinkSound();
+    await feedGu(guId);
+  };
 
   const activeCombatGu = equippedGu.filter(g => g.gu_type === 'active');
   const passiveBodyGu = equippedGu.filter(g => g.gu_type === 'passive_body');
@@ -197,7 +203,7 @@ export default function GuVault() {
 
                     {/* Feed Button */}
                     <button
-                      onClick={() => feedGu(gu.id)}
+                      onClick={() => handleFeed(gu.id)}
                       disabled={isSated || !canAfford || isLoading}
                       className={`w-full py-1.5 rounded text-[10px] uppercase font-bold tracking-wider transition-all border ${
                         isSated
@@ -352,7 +358,7 @@ export default function GuVault() {
                   <div className="flex gap-2">
                     {/* Feed Button */}
                     <button
-                      onClick={() => feedGu(gu.id)}
+                      onClick={() => handleFeed(gu.id)}
                       disabled={isSated || !canAfford || isLoading}
                       className={`flex-1 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all border ${
                         isSated

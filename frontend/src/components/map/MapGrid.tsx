@@ -4,6 +4,7 @@ import { useWorldStore } from '../../hooks/useWorldStore';
 import { useCultivatorStore } from '../../hooks/useCultivator';
 import type { Encounter } from '../../hooks/useWorldStore';
 import { useCombatStore } from '../../hooks/useCombat';
+import { playJadeClinkSound, playBrushSound } from '../../hooks/useAudio';
 
 interface MapGridProps {
   initialNodeData?: any;
@@ -39,7 +40,7 @@ const BIOME_STYLES: Record<string, { bg: string; icon: string; border: string; g
 };
 
 export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
-  const { grid, playerLocation, fetchLocalGrid, loadInitialNodeData, travel } = useWorldStore();
+  const { grid, playerLocation, enforcer, fetchLocalGrid, loadInitialNodeData, travel } = useWorldStore();
   const { cultivator, captureWildGu, fetchAperture } = useCultivatorStore();
 
   const [logs, setLogs] = useState<string[]>(['> Primeval Aperture steady. Ready to explore.']);
@@ -62,6 +63,31 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
     logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [logs]);
 
+  const handleCombat = async (customEnemy?: any) => {
+    const enemy = customEnemy || activeEncounter?.enemy || (activeEncounter?.enemy_name ? {
+      name: activeEncounter.enemy_name,
+      hp: activeEncounter.enemy_hp || 100,
+      atk: activeEncounter.enemy_atk || 15,
+      reward_stones: activeEncounter.reward_stones || 10,
+      is_enforcer: false
+    } : null);
+
+    if (!enemy) return;
+
+    // Start combat via the global store
+    const { startCombat } = useCombatStore.getState();
+    startCombat(
+      enemy.name,
+      enemy.hp || 100,
+      enemy.atk || 15,
+      enemy.reward_stones || 10,
+      Boolean(enemy.is_enforcer)
+    );
+
+    // Clear the map encounter overlay since the CombatArena will take over
+    setActiveEncounter(null);
+  };
+
   const handleTravel = async (targetX: number, targetY: number) => {
     if (activeEncounter) return; // Block move while encounter is unresolved
     try {
@@ -69,8 +95,13 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
       setLogs(prev => [...prev, ...newLogs]);
 
       if (encounter) {
-        setActiveEncounter(encounter);
-        setEncounterResult(null);
+        if (encounter.is_interception && encounter.enemy) {
+          setLogs(prev => [...prev, `> ⚠️ AMBUSH: ${encounter.title}! Forced into battle!`]);
+          handleCombat(encounter.enemy);
+        } else {
+          setActiveEncounter(encounter);
+          setEncounterResult(null);
+        }
       }
 
       // Sync cultivator essence and stones
@@ -98,6 +129,7 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
     setIsSubmitting(true);
     try {
       const stones = activeEncounter?.amount || 15;
+      playJadeClinkSound();
       await fetchAperture();
       setEncounterResult(`✨ Harvested +${stones} Primeval Stones!`);
       setLogs(prev => [...prev, `> Harvested: ${activeEncounter?.title || 'Resource'} (+${stones} Primeval Stones)`]);
@@ -106,22 +138,6 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
     } finally {
       setIsSubmitting(false);
     }
-  };
-
-  const handleCombat = async () => {
-    if (!activeEncounter?.enemy_name) return;
-
-    // Start combat via the global store
-    const { startCombat } = useCombatStore.getState();
-    startCombat(
-      activeEncounter.enemy_name,
-      activeEncounter.enemy_hp || 100,
-      activeEncounter.enemy_atk || 15,
-      activeEncounter.reward_stones || 10
-    );
-
-    // Clear the map encounter overlay since the CombatArena will take over
-    setActiveEncounter(null);
   };
 
   const handleFactionExtort = async () => {
@@ -135,6 +151,7 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
       });
       const data = await res.json();
       if (data.success) {
+        playJadeClinkSound();
         setEncounterResult(data.message);
         setLogs(prev => [...prev, `> ☠️ Extorted ${activeEncounter.faction}: +${data.loot_stones} Stones! Bounty issued.`]);
         await fetchAperture();
@@ -164,6 +181,7 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
       });
       const data = await res.json();
       if (data.success) {
+        playJadeClinkSound();
         setEncounterResult(data.message);
         setLogs(prev => [...prev, `> 🤝 Purchased '${item.name}' from ${activeEncounter.faction} (-${item.cost} Stones).`]);
         await fetchAperture();
@@ -238,12 +256,32 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
                 </button>
                 <div className="w-px h-4 bg-[#2a2620] mx-1"></div>
                 <button
-                  onClick={onExitNode}
+                  onClick={() => { playBrushSound(); onExitNode?.(); }}
                   className="text-[10px] text-[#8a8275] hover:text-[#c89b3c] px-2 py-0.5 rounded hover:bg-[#1a1814] uppercase tracking-wider font-bold border border-[#2a2620] transition-colors"
                 >
                   Exit Node
                 </button>
               </div>
+
+              {/* Dynamic Hunter Matrix: Predator Pursuit Banner */}
+              {enforcer && enforcer.active && enforcer.status !== 'defeated' && (
+                <div className="absolute top-4 right-4 z-20 flex items-center gap-3 bg-gradient-to-r from-red-950/95 via-[#1a0808]/95 to-red-950/95 border-2 border-red-600/80 px-4 py-2 rounded-xl shadow-[0_0_30px_rgba(220,38,38,0.6)] backdrop-blur animate-pulse">
+                  <span className="text-xl animate-bounce">⚖️</span>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-bold text-red-300 uppercase tracking-widest font-sans">
+                        ⚠️ PREDATOR MATRIX: {enforcer.name}
+                      </span>
+                      <span className="text-[9px] bg-red-900 text-red-200 px-1.5 py-0.2 rounded font-mono font-bold border border-red-500">
+                        ⚡ {Math.round(enforcer.stamina)} / {enforcer.max_stamina}
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-zinc-400 font-sans block mt-0.5">
+                      Distance: <strong className="text-amber-300">{Math.abs(enforcer.pos[0] - playerLocation.x) + Math.abs(enforcer.pos[1] - playerLocation.y)} tiles</strong> • Status: <strong className="text-red-400 capitalize">{enforcer.status}</strong>
+                    </span>
+                  </div>
+                </div>
+              )}
 
               {/* Pan/Zoom Canvas Area */}
               <TransformComponent
@@ -269,6 +307,7 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
                   >
                     {grid.map((tile, idx) => {
                       const isPlayerHere = tile.x === playerLocation.x && tile.y === playerLocation.y;
+                      const isEnforcerHere = Boolean(enforcer && enforcer.active && enforcer.status !== 'defeated' && tile.x === enforcer.pos[0] && tile.y === enforcer.pos[1]);
                       const isAdjacent = Math.abs(tile.x - playerLocation.x) <= 1 && Math.abs(tile.y - playerLocation.y) <= 1 && !isPlayerHere;
                       
                       const isFaction = tile.type === 'Faction Outpost' || tile.terrain === 'Faction Outpost' || tile.is_faction_node;
@@ -282,13 +321,13 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
                           onClick={() => isAdjacent ? handleTravel(tile.x, tile.y) : null}
                           className={`
                             relative w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 aspect-square border rounded flex items-center justify-center transition-all duration-300
-                            ${!tile.discovered ? 'bg-[#0a0907] border-[#1a1814]' : `${style.bg} ${style.border}`}
-                            ${!tile.discovered ? 'opacity-35' : 'opacity-100 shadow-lg'}
+                            ${isEnforcerHere ? 'bg-gradient-to-br from-red-950 via-rose-950 to-red-900 border-2 border-red-500 shadow-[0_0_30px_rgba(239,68,68,0.95)] ring-2 ring-red-500 z-25 animate-pulse' : !tile.discovered ? 'bg-[#0a0907] border-[#1a1814]' : `${style.bg} ${style.border}`}
+                            ${!tile.discovered && !isEnforcerHere ? 'opacity-35' : 'opacity-100 shadow-lg'}
                             ${(isSpring || isFaction) && tile.discovered ? (style.glow || '') : ''}
                             ${isPlayerHere ? 'ring-2 ring-[#c89b3c] shadow-[0_0_25px_rgba(200,155,60,0.9)] z-30 scale-110' : ''}
                             ${isAdjacent ? 'cursor-pointer hover:border-[#c89b3c] hover:scale-105 hover:z-20 animate-pulse border-gold/40' : 'cursor-default'}
                           `}
-                          title={`${isFaction ? `Faction Outpost: ${tile.faction || 'Sect Territory'}` : isSpring ? 'Natural Jade Spirit Spring' : tile.type} (${tile.x}, ${tile.y})`}
+                          title={`${isEnforcerHere ? `⚔️ ${enforcer?.name} (${enforcer?.status})` : isFaction ? `Faction Outpost: ${tile.faction || 'Sect Territory'}` : isSpring ? 'Natural Jade Spirit Spring' : tile.type} (${tile.x}, ${tile.y})`}
                           style={{ transformStyle: 'preserve-3d' }}
                         >
                           {/* Billboard / Counter-Rotate Icon Container */}
@@ -305,6 +344,16 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
                                   🚶
                                 </span>
                                 <div className="w-3 h-1 bg-[#c89b3c]/60 rounded-full blur-[1px] mt-0.5"></div>
+                              </div>
+                            ) : isEnforcerHere ? (
+                              <div className="relative flex flex-col items-center">
+                                <span className="text-xl md:text-2xl drop-shadow-[0_4px_15px_rgba(239,68,68,1)] text-red-400 font-bold animate-pulse">
+                                  🗡️
+                                </span>
+                                <div className="w-4 h-1 bg-red-600 rounded-full blur-[1px] mt-0.5 animate-pulse"></div>
+                                <div className="absolute -top-5 whitespace-nowrap bg-black/95 border border-red-500/80 px-1.5 py-0.5 rounded text-[7px] text-red-300 font-bold uppercase tracking-wider shadow-lg">
+                                  ⚔️ Enforcer ({Math.round(enforcer?.stamina || 0)}⚡)
+                                </div>
                               </div>
                             ) : tile.discovered ? (
                               <span className={`text-sm md:text-base opacity-90 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] ${isSpring ? 'scale-125 animate-bounce' : ''}`}>

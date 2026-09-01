@@ -81,6 +81,8 @@ export interface KarmicLedger {
 
 export interface CultivatorStats {
   name: string;
+  title?: string;
+  procedural_title?: string;
   rank: number;
   stage: string;
   aperture_grade: string;
@@ -235,6 +237,24 @@ export interface FeedVaultGuResponse {
   cultivator: CultivatorStats;
 }
 
+export interface RighteousEnforcer {
+  id: string;
+  name: string;
+  title: string;
+  rank: number;
+  stage: string;
+  hp: number;
+  max_hp: number;
+  atk: number;
+  stamina: number;
+  max_stamina: number;
+  pos: [number, number];
+  active: boolean;
+  status: 'hunting' | 'meditating' | 'intercepted' | 'defeated';
+  reward_stones: number;
+  equipped_gu?: any[];
+}
+
 export interface FactionTradeItem {
   id: string;
   name: string;
@@ -261,4 +281,5 @@ export interface FactionEncounter {
     reward_stones: number;
   };
 }
+
 

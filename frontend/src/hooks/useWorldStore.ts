@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { RighteousEnforcer } from '../types/api';
 
 // --- TS Interfaces ---
 export interface OverworldNode {
@@ -55,6 +56,7 @@ export interface Encounter {
   type: string;
   title: string;
   desc: string;
+  is_interception?: boolean;
   action?: string;
   wild_gu?: any;
   enemy_name?: string;
@@ -74,6 +76,7 @@ export interface Encounter {
     atk: number;
     reward_stones: number;
   };
+  enemy?: any;
 }
 
 interface WorldState {
@@ -84,6 +87,7 @@ interface WorldState {
   // Local Micro Grid State (15x15)
   grid: WorldNode[];
   playerLocation: PlayerLocation;
+  enforcer: RighteousEnforcer | null;
   
   isLoading: boolean;
   error: string | null;
@@ -105,6 +109,7 @@ export const useWorldStore = create<WorldState>((set) => ({
   overworldNodes: [],
   grid: [],
   playerLocation: { x: 7, y: 7 },
+  enforcer: null,
   isLoading: false,
   error: null,
 
@@ -115,6 +120,7 @@ export const useWorldStore = create<WorldState>((set) => ({
     set({
       grid: tiles,
       playerLocation: playerPos,
+      enforcer: data.enforcer || null,
       isLoading: false
     });
   },
@@ -190,6 +196,7 @@ export const useWorldStore = create<WorldState>((set) => ({
       set({ 
         grid: data.grid || data.tiles || [],
         playerLocation: data.player_pos ? { x: data.player_pos[0], y: data.player_pos[1] } : { x: 7, y: 7 },
+        enforcer: data.enforcer || null,
         isLoading: false 
       });
     } catch (err: any) {
@@ -214,16 +221,20 @@ export const useWorldStore = create<WorldState>((set) => ({
 
       const data = await res.json();
       
-      // Update state with new grid and position
+      // Update state with new grid, position, and enforcer
       set({
         grid: data.tiles || data.grid,
         playerLocation: { x: data.player_pos[0], y: data.player_pos[1] },
+        enforcer: data.enforcer || null,
         isLoading: false
       });
 
       const encounter = data.event || null;
       const logs = [];
       logs.push(`Traveled to sector [${targetX}, ${targetY}]...`);
+      if (data.enforcer && data.enforcer.active && data.enforcer.status !== 'defeated') {
+        logs.push(`⚠️ Righteous Enforcer pursuing at [${data.enforcer.pos[0]}, ${data.enforcer.pos[1]}] (⚡ ${data.enforcer.stamina}/100)!`);
+      }
       if (encounter) {
         logs.push(`> Encountered: ${encounter.title}`);
       }

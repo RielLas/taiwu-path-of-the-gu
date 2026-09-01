@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useCultivatorStore } from '../../hooks/useCultivator';
+import { playBrushSound } from '../../hooks/useAudio';
 
 interface CharacterLedgerProps {
   onClose: () => void;
@@ -13,6 +14,11 @@ export default function CharacterLedger({ onClose }: CharacterLedgerProps) {
   }, [fetchAperture]);
 
   if (!cultivator) return null;
+
+  const handleClose = () => {
+    playBrushSound();
+    onClose();
+  };
 
   // Fallback defaults for deep matrices if backend is still initializing
   const daoMarks = cultivator.dao_marks || {
@@ -118,7 +124,7 @@ export default function CharacterLedger({ onClose }: CharacterLedgerProps) {
           </div>
 
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="px-5 py-2.5 bg-[#1a1814] hover:bg-[#2a2620] border border-[#2a2620] hover:border-[#c89b3c] text-[#d5cfc4] hover:text-[#c89b3c] rounded-xl text-xs font-sans font-bold uppercase tracking-[0.2em] transition-all shadow-md cursor-pointer flex items-center gap-2"
           >
             <span>✕</span> Return to Overworld

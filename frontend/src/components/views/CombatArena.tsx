@@ -217,11 +217,17 @@ export default function CombatArena() {
             )}
             
             {loot && (
-              <div className="flex items-center justify-center gap-3 my-6">
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-3 my-6">
                 <span className="text-[#8a8275] font-sans text-sm uppercase tracking-wider">Acquired Loot:</span>
                 <div className="bg-[#1a1814] border border-[#c89b3c]/50 px-4 py-2 rounded-lg text-[#c89b3c] font-bold shadow-md">
                   +{loot.stones} Primeval Stones
                 </div>
+                {loot.dropped_gu && (
+                  <div className="bg-gradient-to-r from-red-950 via-[#2a1010] to-amber-950 border border-red-500/80 px-4 py-2 rounded-lg text-amber-200 font-bold shadow-[0_0_20px_rgba(239,68,68,0.6)] flex items-center gap-2 animate-bounce">
+                    <span>🎁</span>
+                    <span>Plundered Gu: [{loot.dropped_gu.name}] (Rank {loot.dropped_gu.tier} {loot.dropped_gu.path})</span>
+                  </div>
+                )}
               </div>
             )}
             

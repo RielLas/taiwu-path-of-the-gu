@@ -3,6 +3,7 @@ from typing import List, Dict, Any, Optional
 from app.engine.world_gen import generate_region, generate_tile_encounter
 from app.engine.cultivator import player_cultivator
 from app.engine.overworld import get_all_regions, get_region_nodes, get_node
+from app.engine.npc import enforcer_manager
 
 router = APIRouter()
 
@@ -39,6 +40,8 @@ async def enter_node(region_id: str, node_id: str):
     player_cultivator.player_pos = [7, 7]
     player_cultivator.current_node = {"node_id": node_id, "node_name": node["name"], "region_id": region_id, "grid_id": grid_id}
 
+    enforcer_info = enforcer_manager.check_and_update(player_cultivator, auto_spawn=True)
+
     return {
         "status": "success",
         "message": f"Entering {node['name']}...",
@@ -46,7 +49,8 @@ async def enter_node(region_id: str, node_id: str):
         "tiles": tiles,
         "grid": tiles,
         "player_pos": player_cultivator.player_pos,
-        "cultivator": player_cultivator.get_stats()
+        "cultivator": player_cultivator.get_stats(),
+        "enforcer": enforcer_info
     }
 
 @router.post("/exit")
@@ -81,6 +85,7 @@ async def get_region(region_id: int):
     """
     tiles = get_or_create_region(region_id)
     reveal_around(tiles, player_cultivator.player_pos[0], player_cultivator.player_pos[1])
+    enforcer_info = enforcer_manager.check_and_update(player_cultivator, auto_spawn=True)
     
     return {
         "region_id": region_id,
@@ -89,7 +94,8 @@ async def get_region(region_id: int):
         "player_pos": player_cultivator.player_pos,
         "tiles": tiles,
         "grid": tiles,  # Alias to prevent frontend undefined errors
-        "cultivator": player_cultivator.get_stats()
+        "cultivator": player_cultivator.get_stats(),
+        "enforcer": enforcer_info
     }
 
 @router.post("/move")
@@ -229,6 +235,35 @@ async def move_player(
             amt = encounter.get("amount", 15)
             player_cultivator.spirit_stones += amt
 
+    # Dynamic Hunter Matrix: Righteous Enforcer pathfinding & chase
+    enforcer_res = enforcer_manager.on_player_action(player_cultivator)
+    enforcer_data = enforcer_res.get("enforcer")
+    
+    # Check Interception (Enforcer caught player at new_x, new_y)
+    if enforcer_res.get("active") and enforcer_data:
+        ex, ey = enforcer_data["pos"]
+        if ex == new_x and ey == new_y:
+            # INTERCEPTION: Immediately halt Overworld exploration and force CombatArena
+            encounter = {
+                "type": "combat",
+                "is_interception": True,
+                "title": f"⚖️ AMBUSH: {enforcer_data['name']}",
+                "desc": f"The {enforcer_data['title']} has intercepted your demonic path! 'Demonic scoundrel, surrender your Gu worms and face the righteous order!'",
+                "enemy": {
+                    "id": enforcer_data["id"],
+                    "name": enforcer_data["name"],
+                    "title": enforcer_data["title"],
+                    "rank": enforcer_data["rank"],
+                    "stage": enforcer_data["stage"],
+                    "hp": enforcer_data["hp"],
+                    "max_hp": enforcer_data["max_hp"],
+                    "atk": enforcer_data["atk"],
+                    "reward_stones": enforcer_data["reward_stones"],
+                    "is_enforcer": True,
+                    "equipped_gu": enforcer_data.get("equipped_gu", [])
+                }
+            }
+
     # Hunger Attrition: Every movement on overworld grid deducts 5 satiety from all Gu (active & vaulted)
     starvation_alerts = player_cultivator.decay_gu_satiety(5)
 
@@ -253,6 +288,7 @@ async def move_player(
         "event": encounter,
         "tiles": tiles,
         "grid": tiles,
+        "enforcer": enforcer_data if (enforcer_res.get("active") and enforcer_data) else None,
         "starvation_alerts": starvation_alerts,
         "cultivator": cultivator_stats
     }
@@ -360,7 +396,6 @@ async def combat_action(payload: Dict[str, Any]):
     rem_enemy_hp = max(0, enemy_hp - dmg_dealt)
     dmg_taken = max(1, enemy_atk - (cultivator_stats["stats"]["defense"]["total"] // 2)) if rem_enemy_hp > 0 and action_type != "flee" else 0
     rem_player_hp = max(0, player_hp - dmg_taken)
-
     is_victory = rem_enemy_hp <= 0
     is_defeat = rem_player_hp <= 0
     fled = action_type == "flee"
@@ -370,8 +405,30 @@ async def combat_action(payload: Dict[str, Any]):
     if is_victory or is_defeat or fled:
         starvation_alerts = player_cultivator.decay_gu_satiety(5)
 
+    dropped_gu = None
+    is_enforcer_fight = payload.get("is_enforcer", False) or (payload.get("enemy_id") == "enforcer_tie_001") or ("Enforcer" in str(payload.get("enemy_name", "")))
+    
     if is_victory:
+        if is_enforcer_fight:
+            loot_res = enforcer_manager.enforcer.generate_loot()
+            reward_stones = loot_res["stones"]
+            dropped_gu = loot_res.get("dropped_gu")
+            if dropped_gu:
+                if len(player_cultivator.aperture) < 10:
+                    player_cultivator.aperture.append(dropped_gu)
+                else:
+                    player_cultivator.vault.append(dropped_gu)
+            enforcer_manager.enforcer.status = "defeated"
+            enforcer_manager.enforcer.active = False
+            
         player_cultivator.spirit_stones += reward_stones
+
+    logs = [
+        action_log if action_type != "flee" else "Attempting to escape the battlefield...",
+        f"Enemy retaliated for {dmg_taken} damage!" if dmg_taken > 0 else ""
+    ]
+    if is_victory and dropped_gu:
+        logs.append(f"🎁 Plundered Gu Worm: [{dropped_gu['name']}] ({dropped_gu['path']}) from the defeated Righteous Enforcer!")
 
     return {
         "success": True,
@@ -384,11 +441,11 @@ async def combat_action(payload: Dict[str, Any]):
         "is_defeat": is_defeat,
         "fled": fled,
         "starvation_alerts": starvation_alerts,
-        "logs": [
-            action_log if action_type != "flee" else "Attempting to escape the battlefield...",
-            f"Enemy retaliated for {dmg_taken} damage!" if dmg_taken > 0 else ""
-        ],
-        "loot": {"stones": reward_stones} if is_victory else None,
+        "logs": [l for l in logs if l],
+        "loot": {
+            "stones": reward_stones,
+            "dropped_gu": dropped_gu
+        } if is_victory else None,
         "cultivator": player_cultivator.get_stats()
     }
 

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useCultivatorStore } from '../../hooks/useCultivator';
+import { playBrushSound } from '../../hooks/useAudio';
 import GuVault from './GuVault';
 
 interface ApertureModalProps {
@@ -32,6 +33,11 @@ export default function ApertureModal({ onClose }: ApertureModalProps) {
   const essenceColor = cultivator?.essence_color || '#22c55e';
   const canNourish = (cultivator?.primeval_essence || 0) >= 30 && (cultivator?.stamina || 0) >= 10 && !isPeakStage;
 
+  const handleSubTabChange = (tab: 'vault' | 'nourish' | 'overview') => {
+    playBrushSound();
+    setSubTab(tab);
+  };
+
   const handleNourish = async () => {
     setIsNourishing(true);
     setNourishAlert(null);
@@ -46,13 +52,41 @@ export default function ApertureModal({ onClose }: ApertureModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 w-screen h-screen bg-[#12100d]/95 backdrop-blur-2xl z-50 pt-8 pb-16 px-4 md:px-8 overflow-y-auto font-serif flex flex-col items-center select-none">
+    <div className="fixed inset-0 w-screen h-screen bg-[#12100d]/95 backdrop-blur-2xl z-50 pt-8 pb-16 px-4 md:px-8 overflow-y-auto font-serif flex flex-col items-center select-none relative">
       
+      {/* Ambient Aperture VFX: Dynamic Essence Particle Motes */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
+        {Array.from({ length: 24 }).map((_, i) => {
+          const size = 4 + (i % 5) * 3;
+          const left = (i * 4.3 + (i % 3) * 2.5) % 100;
+          const top = (i * 7.7 + (i % 4) * 3.2) % 100;
+          const duration = 5 + (i % 6) * 1.8;
+          const delay = (i % 5) * 0.9;
+          return (
+            <div
+              key={i}
+              className="absolute rounded-full pointer-events-none blur-[1.5px] animate-float"
+              style={{
+                width: `${size}px`,
+                height: `${size}px`,
+                left: `${left}%`,
+                top: `${top}%`,
+                backgroundColor: essenceColor,
+                boxShadow: `0 0 ${size * 2.5}px ${essenceColor}`,
+                opacity: 0.2 + (i % 4) * 0.12,
+                animationDuration: `${duration}s`,
+                animationDelay: `${delay}s`,
+              }}
+            />
+          );
+        })}
+      </div>
+
       {/* Top Exit Button */}
       {onClose && (
-        <div className="w-full max-w-6xl flex justify-end mb-2">
+        <div className="w-full max-w-6xl flex justify-end mb-2 relative z-10">
           <button
-            onClick={onClose}
+            onClick={() => { playBrushSound(); onClose(); }}
             className="flex items-center gap-2 px-4 py-2 rounded-xl bg-black/60 border border-[#2a2620] hover:border-[#c89b3c]/50 text-[#8a8275] hover:text-[#d5cfc4] text-xs font-sans uppercase tracking-widest transition-all cursor-pointer shadow-lg"
           >
             ✕ Return to Overworld
@@ -117,9 +151,9 @@ export default function ApertureModal({ onClose }: ApertureModalProps) {
         )}
 
         {/* Sub-Tab Navigation Switcher */}
-        <div className="flex justify-center gap-4 mt-6">
+        <div className="flex justify-center gap-4 mt-6 relative z-10">
           <button
-            onClick={() => setSubTab('vault')}
+            onClick={() => handleSubTabChange('vault')}
             className={`px-5 py-2 rounded-xl text-xs font-sans font-bold uppercase tracking-wider transition-all border cursor-pointer ${
               subTab === 'vault'
                 ? 'bg-[#3b4d3c]/40 border-[#3b4d3c] text-[#d5cfc4] shadow-[0_0_15px_rgba(59,77,60,0.3)]'
@@ -129,7 +163,7 @@ export default function ApertureModal({ onClose }: ApertureModalProps) {
             🏺 Gu Vault & Loadout (Max 3 Combat)
           </button>
           <button
-            onClick={() => setSubTab('nourish')}
+            onClick={() => handleSubTabChange('nourish')}
             className={`px-5 py-2 rounded-xl text-xs font-sans font-bold uppercase tracking-wider transition-all border cursor-pointer ${
               subTab === 'nourish'
                 ? 'bg-[#c89b3c]/30 border-[#c89b3c] text-[#d5cfc4] shadow-[0_0_15px_rgba(200,155,60,0.2)]'
@@ -139,7 +173,7 @@ export default function ApertureModal({ onClose }: ApertureModalProps) {
             🌊 Aperture Nourishment (温养空窍)
           </button>
           <button
-            onClick={() => setSubTab('overview')}
+            onClick={() => handleSubTabChange('overview')}
             className={`px-5 py-2 rounded-xl text-xs font-sans font-bold uppercase tracking-wider transition-all border cursor-pointer ${
               subTab === 'overview'
                 ? 'bg-sky-950/40 border-sky-700/60 text-[#d5cfc4] shadow-[0_0_15px_rgba(56,189,248,0.2)]'

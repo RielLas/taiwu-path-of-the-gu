@@ -10,6 +10,7 @@ export interface Enemy {
   maxHp: number;
   atk: number;
   reward_stones: number;
+  is_enforcer?: boolean;
 }
 
 export interface CombatLog {
@@ -24,11 +25,11 @@ interface CombatStore {
   playerMaxHp: number;
   enemy: Enemy | null;
   logs: CombatLog[];
-  loot: { stones: number; items?: any[] } | null;
+  loot: { stones: number; dropped_gu?: any; items?: any[] } | null;
   killerMove: KillerMove | null;
   isProcessing: boolean;
 
-  startCombat: (enemyName: string, enemyHp: number, enemyAtk: number, rewardStones: number) => void;
+  startCombat: (enemyName: string, enemyHp: number, enemyAtk: number, rewardStones: number, isEnforcer?: boolean) => void;
   executeAction: (actionType: 'strike' | 'gu' | 'killer_move' | 'flee', guId?: string, guName?: string, power?: number, cost?: number) => Promise<void>;
   endCombat: () => void;
 }
@@ -45,7 +46,7 @@ export const useCombatStore = create<CombatStore>((set, get) => ({
   killerMove: null,
   isProcessing: false,
 
-  startCombat: (enemyName, enemyHp, enemyAtk, rewardStones) => {
+  startCombat: (enemyName, enemyHp, enemyAtk, rewardStones, isEnforcer = false) => {
     const cultivator = useCultivatorStore.getState().cultivator;
     const guWorms = useCultivatorStore.getState().guWorms;
     
@@ -89,12 +90,12 @@ export const useCombatStore = create<CombatStore>((set, get) => ({
         };
       } else if (paths.some(p => p.includes('light')) && paths.some(p => p.includes('moon'))) {
         killerMove = {
-          id: 'killer_celestial_radiance',
-          name: 'Celestial Radiance Flash',
-          chinese_name: '日月凌空闪',
-          damage: 210,
+          id: 'killer_luminous_crescent',
+          name: 'Luminous Moonlight Flurry',
+          chinese_name: '皓月流光',
+          damage: 200,
           essence_cost: 35,
-          description: 'Harmonizes solar light particles with lunar curved blades for an unavoidable flash strike!',
+          description: 'Fires a rapid barrage of blinding celestial moon arcs!',
           required_paths: ['Light Path', 'Moon Path']
         };
       } else if (activeGu.length >= 3) {
@@ -126,17 +127,18 @@ export const useCombatStore = create<CombatStore>((set, get) => ({
       playerMaxHp: maxHp,
       killerMove: killerMove,
       enemy: {
-        id: `enemy_${Date.now()}`,
+        id: isEnforcer ? 'enforcer_tie_001' : `enemy_${Date.now()}`,
         name: enemyName,
         rank: 1,
         hp: enemyHp,
         maxHp: enemyHp,
         atk: enemyAtk,
-        reward_stones: rewardStones
+        reward_stones: rewardStones,
+        is_enforcer: isEnforcer
       },
       logs: [{ 
         id: Date.now().toString(), 
-        message: `⚔️ Engaged in mortal combat with ${enemyName}!`, 
+        message: isEnforcer ? `⚖️ AMBUSH! The Righteous Order approaches! ${enemyName} demands your execution!` : `⚔️ Engaged in mortal combat with ${enemyName}!`, 
         type: 'system' 
       }],
       loot: null,
@@ -175,6 +177,8 @@ export const useCombatStore = create<CombatStore>((set, get) => ({
           gu_id: guId,
           killer_id: guId,
           enemy_id: state.enemy.id,
+          enemy_name: state.enemy.name,
+          is_enforcer: state.enemy.is_enforcer,
           enemy_hp: state.enemy.hp,
           enemy_atk: state.enemy.atk,
           reward_stones: state.enemy.reward_stones,
@@ -262,22 +266,23 @@ export const useCombatStore = create<CombatStore>((set, get) => ({
 
       // Check combat resolution
       if (data.is_victory) {
+        const victoryLogs: CombatLog[] = [
+          { id: `${logId}_vic`, message: `🏆 VICTORY! Slain ${state.enemy?.name || 'Enemy'}.`, type: 'system' }
+        ];
+        if (data.loot?.stones) {
+          victoryLogs.push({ id: `${logId}_loot`, message: `💎 Pillaged ${data.loot.stones} Primeval Stones.`, type: 'loot' });
+        }
+        if (data.loot?.dropped_gu) {
+          victoryLogs.push({ id: `${logId}_gu_drop`, message: `🎁 Plundered Gu: [${data.loot.dropped_gu.name}] (${data.loot.dropped_gu.path})!`, type: 'loot' });
+        }
+
         set(s => ({
           loot: data.loot,
-          logs: [
-            ...s.logs,
-            { id: `${logId}_vic`, message: `🏆 VICTORY! Slain ${s.enemy?.name}.`, type: 'system' },
-            ...(data.loot?.stones ? [{ id: `${logId}_loot`, message: `💎 Pillaged ${data.loot.stones} Primeval Stones.`, type: 'loot' } as CombatLog] : [])
-          ]
+          logs: [...s.logs, ...victoryLogs]
         }));
         
-        // Give actual rewards in global store
-        const cultivator = useCultivatorStore.getState().cultivator;
-        if (cultivator && data.loot?.stones) {
-          useCultivatorStore.setState({
-            cultivator: { ...cultivator, spirit_stones: cultivator.spirit_stones + data.loot.stones }
-          });
-        }
+        // Refresh full cultivator aperture and resources
+        useCultivatorStore.getState().fetchAperture();
       } else if (data.is_defeat) {
         // Ruthless Mortality Death Penalty
         try {

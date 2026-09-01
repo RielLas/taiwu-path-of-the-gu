@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useCultivatorStore } from '../../hooks/useCultivator';
+import { playAscendSound, playBrushSound } from '../../hooks/useAudio';
 
 interface AscensionChamberProps {
   onClose: () => void;
@@ -40,6 +41,7 @@ export default function AscensionChamber({ onClose, onAscendSuccess }: Ascension
       await fetchAperture();
 
       if (res.success && res.wall_broken) {
+        playAscendSound();
         setOutcome({
           success: true,
           wallBroken: true,
@@ -86,7 +88,7 @@ export default function AscensionChamber({ onClose, onAscendSuccess }: Ascension
         
         {/* Top Close Button */}
         <button
-          onClick={onClose}
+          onClick={() => { playBrushSound(); onClose(); }}
           className="absolute top-5 right-5 text-gray-500 hover:text-[#d5cfc4] px-3 py-1.5 rounded-xl border border-transparent hover:border-[#2a2620] transition-all cursor-pointer font-sans text-xs uppercase tracking-widest bg-black/40"
         >
           ✕ Exit Chamber

@@ -313,13 +313,16 @@ class CultivatorState:
         else:
             align_desc = "Orthodox Righteous Paragon"
 
+        procedural_title = self.generate_procedural_title(total_strength, total_defense, dao_marks)
+
         # Karmic & Social Ledger
         karmic_ledger = {
             "alignment": align_desc,
             "alignment_score": self.alignment_score,  # Range -100 (Demonic) to +100 (Righteous)
-            "reputation_title": "Demonic Scourge of Qing Mao Mountain" if self.alignment_score < 0 else "Righteous Scion",
+            "reputation_title": procedural_title,
+            "procedural_title": procedural_title,
             "known_aliases": [
-                "Fang Yuan (方源)",
+                f"Fang Yuan ({procedural_title})",
                 "Gu Yue Fang Yuan",
                 "Spring Autumn Reincarnator",
                 "Cold-Blooded Moonblade"
@@ -330,6 +333,8 @@ class CultivatorState:
 
         return {
             "name": self.name,
+            "title": procedural_title,
+            "procedural_title": procedural_title,
             "rank": self.rank,
             "stage": self.stage,
             "aperture_grade": self.aperture_grade,
@@ -366,6 +371,55 @@ class CultivatorState:
             "karmic_ledger": karmic_ledger,
             "killer_move": self.get_killer_move_synergy()
         }
+
+    def generate_procedural_title(self, total_strength: int, total_defense: int, dao_marks: Dict[str, int]) -> str:
+        """
+        Procedural Titles:
+        Dynamically generates active titles and aliases based on cultivator stats, karma/alignment, and Dao marks.
+        """
+        alignment = self.alignment_score
+        
+        # 1. Strength & Transformation Path Titles
+        if total_strength >= 30:
+            if alignment <= -50:
+                return "Demonic Boar-Fist"
+            elif alignment > 30:
+                return "Righteous Titan-Force"
+            else:
+                return "Iron-Shouldered Savage"
+        elif total_defense >= 25:
+            if alignment <= -50:
+                return "Impervious Blood-Armor"
+            else:
+                return "Steel-Skin Vanguard"
+                
+        # 2. Dao Mark Path Titles
+        blood_marks = dao_marks.get("Blood Path", 0)
+        moon_marks = dao_marks.get("Moon Path", 0)
+        water_marks = dao_marks.get("Water Path", 0)
+        
+        if blood_marks >= 10:
+            if alignment <= -50:
+                return "Blood-Sea Demonic Scourge"
+            else:
+                return "Crimson Blade Avenger"
+        if moon_marks >= 10:
+            if alignment <= -50:
+                return "Desolate Moon Fiend"
+            elif alignment > 20:
+                return "Ethereal Moonlight Scholar"
+            else:
+                return "Cold-Blooded Moonblade"
+        if water_marks >= 10:
+            return "Azure Tide Wanderer"
+            
+        # 3. Baseline Titles based on Rank and Alignment
+        if alignment <= -50:
+            return "Demonic Scoundrel" if self.rank == 1 else "Rank 2 Demonic Elder"
+        elif alignment > 30:
+            return "Righteous Disciple" if self.rank == 1 else "Righteous Clan Master"
+        else:
+            return "Solitary Wanderer"
 
     def get_killer_move_synergy(self) -> Optional[Dict[str, Any]]:
         """
