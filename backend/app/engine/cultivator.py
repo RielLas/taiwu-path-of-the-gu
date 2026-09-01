@@ -184,6 +184,87 @@ class CultivatorState:
         current_essence = min(self.primeval_essence, max_essence)
         max_hp = total_defense * 10
 
+        # Body Tempering Records (from passive Gu)
+        body_tempering = []
+        for gu in self.aperture:
+            if gu.get("gu_type") == "passive_body":
+                buff = gu.get("passive_buff")
+                body_tempering.append({
+                    "source": gu["name"],
+                    "path": gu.get("path", "Strength Path"),
+                    "bonus": buff.get("label", gu["name"]) if buff else "Physical Reinforcement",
+                    "active": gu.get("hunger", 0) >= 20,
+                    "tier": gu.get("tier", 1)
+                })
+        for gu in self.vault:
+            if gu.get("gu_type") == "passive_body":
+                buff = gu.get("passive_buff")
+                body_tempering.append({
+                    "source": gu["name"],
+                    "path": gu.get("path", "Strength Path"),
+                    "bonus": buff.get("label", gu["name"]) if buff else "Physical Reinforcement",
+                    "active": False,
+                    "tier": gu.get("tier", 1)
+                })
+
+        # Accumulated Dao Marks across various paths
+        dao_marks = {
+            "Strength Path": 35 + (self.rank * 10),
+            "Blood Path": 20 + (self.rank * 5),
+            "Moon Path": 28 + (self.rank * 8),
+            "Transformation Path": 22 + (self.rank * 5),
+            "Water Path": 10,
+            "Light Path": 12,
+            "Poison Path": 18 + (self.rank * 4),
+            "Time (Chrono) Path": 999  # Spring Autumn Cicada imprint
+        }
+
+        # Cultivation Core Metrics
+        cultivation_core = {
+            "recovery_rate": f"{2.5 * self.rank:.1f}% Primeval Essence / Minute",
+            "crystal_wall_durability": "100% (Solid Crystal Light Barrier)" if self.aperture_status == "Pristine" else "75% (Fractured Fissures Detected)",
+            "crystal_wall_type": "Purple Crystal Layer" if self.rank >= 2 else "Green Copper Crystal Wall",
+            "talent_desc": "A-Grade Innate Aptitude (90-99%). The Primeval Sea occupies 93% of the Aperture volume. An illustrious genius of the Gu world with immense capacity to batter the crystal aperture walls.",
+            "essence_density": "Rank 2 Pale Charcoal Primeval Essence" if self.rank >= 2 else "Rank 1 Dark Green Copper Primeval Essence",
+            "aperture_dimensions": f"Spatial Dimension: {self.rank * 100} Li Diameter"
+        }
+
+        # Karmic & Social Ledger
+        karmic_ledger = {
+            "alignment": "Demonic Path (Ruthless & Pragmatic)",
+            "alignment_score": -75,  # Range -100 (Demonic) to +100 (Righteous)
+            "reputation_title": "Demonic Scourge of Qing Mao Mountain",
+            "known_aliases": [
+                "Fang Yuan (方源)",
+                "Gu Yue Fang Yuan",
+                "Spring Autumn Reincarnator",
+                "Cold-Blooded Moonblade"
+            ],
+            "active_bounties": [
+                {
+                    "id": "bounty_1",
+                    "issuer": "Gu Yue Clan Elders",
+                    "reward": "500 Primeval Stones",
+                    "reason": "Defying Clan Hierarchy & Extortion of Fellow Disciples",
+                    "threat_level": "High"
+                },
+                {
+                    "id": "bounty_2",
+                    "issuer": "Southern Border Merchant Guild",
+                    "reward": "300 Primeval Stones",
+                    "reason": "Unlicensed Black Market Gu Trading",
+                    "threat_level": "Moderate"
+                }
+            ],
+            "factions": [
+                {"name": "Gu Yue Clan", "standing": "Hostile / Marked for Execution", "reputation": -80, "type": "Righteous Clan"},
+                {"name": "Bai Clan", "standing": "Wary & Suspicious", "reputation": -30, "type": "Righteous Clan"},
+                {"name": "Xiong Clan", "standing": "Hostile Competitor", "reputation": -50, "type": "Righteous Clan"},
+                {"name": "Shang Clan Merchant City", "standing": "Pragmatic Trading Partner", "reputation": 25, "type": "Neutral Superclan"},
+                {"name": "Shadow Sect Remnants", "standing": "Veiled Observers", "reputation": 0, "type": "Ancient Demonic Mystery"}
+            ]
+        }
+
         return {
             "name": self.name,
             "rank": self.rank,
@@ -210,6 +291,10 @@ class CultivatorState:
                 },
                 "speed": self.base_speed
             },
+            "dao_marks": dao_marks,
+            "body_tempering": body_tempering,
+            "cultivation_core": cultivation_core,
+            "karmic_ledger": karmic_ledger,
             "killer_move": self.get_killer_move_synergy()
         }
 

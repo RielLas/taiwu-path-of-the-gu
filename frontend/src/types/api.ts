@@ -38,6 +38,47 @@ export interface KillerMove {
   active_gu_names?: string[];
 }
 
+export interface BodyTemperingRecord {
+  source: string;
+  path: string;
+  bonus: string;
+  active: boolean;
+  tier: number;
+}
+
+export interface CultivationCore {
+  recovery_rate: string;
+  crystal_wall_durability: string;
+  crystal_wall_type: string;
+  talent_desc: string;
+  essence_density: string;
+  aperture_dimensions: string;
+}
+
+export interface BountyRecord {
+  id: string;
+  issuer: string;
+  reward: string;
+  reason: string;
+  threat_level: string;
+}
+
+export interface FactionStanding {
+  name: string;
+  standing: string;
+  reputation: number;
+  type: string;
+}
+
+export interface KarmicLedger {
+  alignment: string;
+  alignment_score: number;
+  reputation_title: string;
+  known_aliases: string[];
+  active_bounties: BountyRecord[];
+  factions: FactionStanding[];
+}
+
 export interface CultivatorStats {
   name: string;
   rank: number;
@@ -56,6 +97,10 @@ export interface CultivatorStats {
     defense: StatDetail;
     speed: number;
   };
+  dao_marks?: Record<string, number>;
+  body_tempering?: BodyTemperingRecord[];
+  cultivation_core?: CultivationCore;
+  karmic_ledger?: KarmicLedger;
   killer_move?: KillerMove | null;
 }
 

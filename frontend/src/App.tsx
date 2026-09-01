@@ -5,10 +5,11 @@ import TaiwuHUD from './components/ui/TaiwuHUD';
 import ApertureModal from './components/aperture/ApertureModal';
 import CrucibleModal from './components/crucible/CrucibleModal';
 import AscensionChamber from './components/views/AscensionChamber';
+import CharacterLedger from './components/views/CharacterLedger';
 import CombatArena from './components/views/CombatArena';
 import { useCombatStore } from './hooks/useCombat';
 
-export type ActiveTab = 'World' | 'Aperture' | 'Refine' | 'Ascend';
+export type ActiveTab = 'World' | 'Aperture' | 'Refine' | 'Ascend' | 'Ledger';
 
 function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('World');
@@ -60,6 +61,13 @@ function App() {
         <AscensionChamber 
           onClose={() => setActiveTab('World')} 
           onAscendSuccess={() => setActiveTab('World')} 
+        />
+      )}
+
+      {/* Scroll of Taiwu Character Ledger */}
+      {activeTab === 'Ledger' && (
+        <CharacterLedger 
+          onClose={() => setActiveTab('World')} 
         />
       )}
 

@@ -2,8 +2,8 @@ import { useEffect } from 'react';
 import { useCultivatorStore } from '../../hooks/useCultivator';
 
 interface TaiwuHUDProps {
-  activeTab: 'World' | 'Aperture' | 'Refine' | 'Ascend';
-  setActiveTab: (tab: 'World' | 'Aperture' | 'Refine' | 'Ascend') => void;
+  activeTab: 'World' | 'Aperture' | 'Refine' | 'Ascend' | 'Ledger';
+  setActiveTab: (tab: 'World' | 'Aperture' | 'Refine' | 'Ascend' | 'Ledger') => void;
 }
 
 export default function TaiwuHUD({ activeTab, setActiveTab }: TaiwuHUDProps) {
@@ -30,8 +30,12 @@ export default function TaiwuHUD({ activeTab, setActiveTab }: TaiwuHUDProps) {
         {/* Subtle top glow line */}
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[80%] h-[1px] bg-gradient-to-r from-transparent via-[#8a8275] to-transparent opacity-50"></div>
 
-        {/* Left Side Portrait */}
-        <div className="absolute bottom-6 left-6 md:left-12 w-28 h-36 bg-gradient-to-t from-gray-900 to-[#12100d] border-2 border-[#c89b3c] border-opacity-30 rounded-t-[40%] flex flex-col items-center justify-end overflow-visible z-20 shadow-[0_10px_30px_rgba(0,0,0,0.8)] transition-transform hover:scale-105 duration-500 cursor-pointer">
+        {/* Left Side Portrait - Interactive Trigger for Character Ledger */}
+        <div 
+          onClick={() => setActiveTab('Ledger')}
+          title="Open Character Ledger (Scroll of Taiwu)"
+          className="absolute bottom-6 left-6 md:left-12 w-28 h-36 bg-gradient-to-t from-gray-900 to-[#12100d] border-2 border-[#c89b3c] border-opacity-30 rounded-t-[40%] flex flex-col items-center justify-end overflow-visible z-20 shadow-[0_10px_30px_rgba(0,0,0,0.8)] transition-transform hover:scale-105 duration-500 cursor-pointer group hover:border-[#c89b3c]"
+        >
           <div className="absolute inset-0 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/black-scales.png')] rounded-t-[40%] overflow-hidden pointer-events-none"></div>
           
           {/* Aperture Status Pill anchored safely above the portrait arch */}
@@ -45,7 +49,11 @@ export default function TaiwuHUD({ activeTab, setActiveTab }: TaiwuHUDProps) {
             </span>
           </div>
 
-          <div className="w-full text-center bg-black/90 backdrop-blur-sm text-[9px] py-1.5 text-[#d5cfc4] font-serif tracking-widest border-t border-[#c89b3c]/30 z-20 uppercase font-bold">
+          <div className="text-2xl mb-2 group-hover:scale-110 transition-transform">
+            🎴
+          </div>
+
+          <div className="w-full text-center bg-black/90 backdrop-blur-sm text-[9px] py-1.5 text-[#d5cfc4] group-hover:text-[#c89b3c] font-serif tracking-widest border-t border-[#c89b3c]/30 z-20 uppercase font-bold transition-colors">
             {cultivator?.name || 'CULTIVATOR'} (R{cultivator?.rank || 1})
           </div>
         </div>
