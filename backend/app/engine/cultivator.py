@@ -292,11 +292,11 @@ class CultivatorState:
             INSERT INTO cultivator_state (
                 id, name, rank, stage, aperture_grade, aptitude_percentage, aperture_status,
                 primeval_essence, max_essence, nourish_progress, stamina, max_stamina,
-                last_stamina_update, essence_type, player_pos_x, player_pos_y,
+                last_stamina_update, essence_type, spirit_stones, primeval_stones, player_pos_x, player_pos_y,
                 base_strength, base_defense, base_speed, current_hp, alignment_score,
                 faction_reputations, active_bounties, aperture, vault, current_region_id, updated_at
             ) VALUES (
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             )
             ON CONFLICT(id) DO UPDATE SET
                 name=excluded.name,
@@ -312,6 +312,8 @@ class CultivatorState:
                 max_stamina=excluded.max_stamina,
                 last_stamina_update=excluded.last_stamina_update,
                 essence_type=excluded.essence_type,
+                spirit_stones=excluded.spirit_stones,
+                primeval_stones=excluded.primeval_stones,
                 player_pos_x=excluded.player_pos_x,
                 player_pos_y=excluded.player_pos_y,
                 base_strength=excluded.base_strength,
@@ -328,7 +330,7 @@ class CultivatorState:
             """, (
                 self.character_id, self.name, self.rank, self.stage, self.aperture_grade, self.aptitude_percentage, self.aperture_status,
                 self.primeval_essence, self.max_essence, self.nourish_progress, self.stamina, self.max_stamina,
-                self.last_stamina_update, self.essence_type, self.player_pos[0], self.player_pos[1],
+                self.last_stamina_update, self.essence_type, self.spirit_stones, self.spirit_stones, self.player_pos[0], self.player_pos[1],
                 self.base_strength, self.base_defense, self.base_speed, self.current_hp, self.alignment_score,
                 json.dumps(self.faction_reputations), json.dumps(self.active_bounties),
                 json.dumps(self.aperture), json.dumps(self.vault), self.current_region_id, now
@@ -388,18 +390,22 @@ class CultivatorState:
             else:
                 self.current_region_id = "southern_border_gu_yue"
             
-            # Legacy DB migration: only inject legacy stones if vault is completely empty
-            if len(self.vault) == 0 and ("primeval_stones" in row.keys() or "spirit_stones" in row.keys()):
-                legacy_stones = row["primeval_stones"] if "primeval_stones" in row.keys() and row["primeval_stones"] is not None else (row["spirit_stones"] if "spirit_stones" in row.keys() and row["spirit_stones"] is not None else 0)
-                if legacy_stones > 0:
-                    self.vault.insert(0, {
-                        "item_id": "primeval_stone",
-                        "id": "primeval_stone",
-                        "name": "Primeval Stone",
-                        "quantity": int(legacy_stones),
-                        "type": "material",
-                        "description": "Standard currency and essence recovery medium of the Gu World."
-                    })
+            # Ensure primeval_stone item exists in vault (migrating legacy database values if present)
+            has_stone_item = any(item.get("item_id") == "primeval_stone" or item.get("id") == "primeval_stone" for item in self.vault)
+            if not has_stone_item:
+                legacy_stones = (
+                    row["primeval_stones"] if "primeval_stones" in row.keys() and row["primeval_stones"] is not None
+                    else (row["spirit_stones"] if "spirit_stones" in row.keys() and row["spirit_stones"] is not None else None)
+                )
+                initial_qty = int(legacy_stones) if legacy_stones is not None and int(legacy_stones) > 0 else 500
+                self.vault.insert(0, {
+                    "item_id": "primeval_stone",
+                    "id": "primeval_stone",
+                    "name": "Primeval Stone",
+                    "quantity": initial_qty,
+                    "type": "material",
+                    "description": "Standard currency and essence recovery medium of the Gu World."
+                })
 
             # Ensure all Gu have satiety and hunger initialized
             for gu in self.aperture:
@@ -1132,10 +1138,12 @@ class CultivatorState:
         """
         Returns full vault and aperture equipment inventory state.
         """
+        vault_gu_only = [g for g in self.vault if g.get("type") != "material"]
         return {
             "status": "success",
             "equipped_gu": self.aperture,
-            "vault_gu": self.vault,
+            "vault_gu": vault_gu_only,
+            "vault": self.vault,
             "vault_capacity": self.get_vault_capacity(),
             "max_active_slots": 3,
             "equipped_active_count": self.get_equipped_active_count(),

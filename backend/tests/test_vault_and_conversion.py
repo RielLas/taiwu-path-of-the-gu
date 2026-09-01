@@ -135,16 +135,24 @@ def test_feed_gu_from_vault_item_stack():
     assert gu["satiety"] == 80
 
 def test_feed_gu_insufficient_funds_when_item_missing():
-    """Handles missing primeval_stone Vault item as insufficient funds error."""
-    # Purge stones from vault
+    """Handles missing/zero primeval_stone Vault item as insufficient funds error."""
+    # Set 0 stones in vault
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
     UPDATE cultivator_state SET
+        spirit_stones = 0,
+        primeval_stones = 0,
         vault = ?
     WHERE id = 1
     """, (
         json.dumps([
+            {
+                "item_id": "primeval_stone",
+                "id": "primeval_stone",
+                "quantity": 0,
+                "type": "material"
+            },
             {
                 "id": "gu_test_vault_boar",
                 "name": "White Boar Gu",

@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import OverworldModal from './components/world/OverworldModal';
 import MapGrid from './components/map/MapGrid';
 import TaiwuHUD from './components/ui/TaiwuHUD';
 import ApertureModal from './components/aperture/ApertureModal';
@@ -20,9 +19,6 @@ function App() {
   const isCombatActive = useCombatStore((state) => state.isActive);
   const cultivator = useCultivatorStore((state) => state.cultivator);
 
-  // When the player enters a Node from the Overworld, we switch to the tile explorer
-  const [activeNodeData, setActiveNodeData] = useState<any>(null);
-
   const handleEnterWorld = async () => {
     setIsEntering(true);
     await unlockAudioContext();
@@ -30,14 +26,6 @@ function App() {
     setTimeout(() => {
       setIsInitialized(true);
     }, 400);
-  };
-
-  const handleEnterNode = (nodeData: any) => {
-    setActiveNodeData(nodeData);
-  };
-
-  const handleExitNode = () => {
-    setActiveNodeData(null);
   };
 
   // Global Modal & Overlay Supremacy: HUD only renders during raw overworld exploration
@@ -110,18 +98,9 @@ function App() {
         <div className="fixed inset-0 bg-red-900/10 shadow-[inset_0_0_90px_rgba(153,27,27,0.6)] border-[8px] border-red-950/40 pointer-events-none z-50 animate-pulse" />
       )}
 
-      {/* World View: Overworld Map or Node Tile Explorer */}
+      {/* World View: 30x30 Isometric World MapGrid */}
       <div className={`transition-opacity duration-500 ${activeTab === 'World' ? 'opacity-100' : 'opacity-0 pointer-events-none absolute inset-0'}`}>
-        {activeNodeData ? (
-          // Inside a node — show the 15x15 local tile explorer
-          <MapGrid 
-            initialNodeData={activeNodeData} 
-            onExitNode={handleExitNode} 
-          />
-        ) : (
-          // Overworld map with 5 regions & nodes
-          <OverworldModal onEnterNode={handleEnterNode} />
-        )}
+        <MapGrid />
       </div>
 
       {/* Aperture Modal */}

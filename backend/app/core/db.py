@@ -87,6 +87,10 @@ def init_db():
             cursor.execute("ALTER TABLE cultivator_state ADD COLUMN current_region_id TEXT DEFAULT 'southern_border_gu_yue'")
         if "vault" not in columns:
             cursor.execute("ALTER TABLE cultivator_state ADD COLUMN vault TEXT DEFAULT '[]'")
+        if "spirit_stones" not in columns:
+            cursor.execute("ALTER TABLE cultivator_state ADD COLUMN spirit_stones INTEGER DEFAULT 500")
+        if "primeval_stones" not in columns:
+            cursor.execute("ALTER TABLE cultivator_state ADD COLUMN primeval_stones INTEGER DEFAULT 500")
         conn.commit()
     finally:
         conn.close()
