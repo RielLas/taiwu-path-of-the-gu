@@ -194,6 +194,7 @@ export interface VaultDataResponse {
   status: string;
   equipped_gu: GuWorm[];
   vault_gu: GuWorm[];
+  vault?: any[];
   vault_capacity: number;
   max_active_slots: number;
   equipped_active_count: number;

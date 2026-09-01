@@ -7,6 +7,7 @@ const API_BASE = 'http://127.0.0.1:8001/api/v1/vault';
 interface VaultState {
   equippedGu: GuWorm[];
   vaultGu: GuWorm[];
+  vault: any[];
   vaultCapacity: number;
   maxActiveSlots: number;
   equippedActiveCount: number;
@@ -18,6 +19,7 @@ interface VaultState {
   equipGu: (guId: string) => Promise<EquipGuResponse>;
   unequipGu: (guId: string) => Promise<UnequipGuResponse>;
   feedGu: (guId: string) => Promise<any>;
+  consumeStone: (quantity?: number) => Promise<any>;
   calculateFeedCost: (tier: number) => number;
   clearFeedback: () => void;
 }
@@ -25,6 +27,7 @@ interface VaultState {
 export const useVaultStore = create<VaultState>((set) => ({
   equippedGu: [],
   vaultGu: [],
+  vault: [],
   vaultCapacity: 5,
   maxActiveSlots: 3,
   equippedActiveCount: 0,
@@ -46,6 +49,7 @@ export const useVaultStore = create<VaultState>((set) => ({
       set({
         equippedGu: data.equipped_gu,
         vaultGu: data.vault_gu,
+        vault: data.vault || [],
         vaultCapacity: data.vault_capacity,
         maxActiveSlots: data.max_active_slots,
         equippedActiveCount: data.equipped_active_count,
@@ -178,6 +182,49 @@ export const useVaultStore = create<VaultState>((set) => ({
       return data;
     } catch (err: any) {
       const msg = err.message || 'Error feeding Gu';
+      set({ error: msg, feedbackMessage: { text: msg, type: 'error' }, isLoading: false });
+      throw err;
+    }
+  },
+
+  consumeStone: async (quantity: number = 1) => {
+    set({ isLoading: true, error: null, feedbackMessage: null });
+    try {
+      const response = await fetch('http://127.0.0.1:8001/api/v1/cultivator/consume-stone', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quantity })
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || (data as any).detail || 'Failed to consume Primeval Stones');
+      }
+
+      set({
+        feedbackMessage: { text: data.message, type: 'success' },
+        isLoading: false
+      });
+
+      if (data.cultivator) {
+        useCultivatorStore.setState({
+          cultivator: data.cultivator
+        });
+      }
+
+      // Re-fetch vault
+      const vRes = await fetch(`${API_BASE}`);
+      if (vRes.ok) {
+        const vData = await vRes.json();
+        set({
+          equippedGu: vData.equipped_gu,
+          vaultGu: vData.vault_gu,
+          vault: vData.vault || []
+        });
+      }
+
+      return data;
+    } catch (err: any) {
+      const msg = err.message || 'Error consuming stones';
       set({ error: msg, feedbackMessage: { text: msg, type: 'error' }, isLoading: false });
       throw err;
     }
