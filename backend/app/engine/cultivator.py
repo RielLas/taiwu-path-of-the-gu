@@ -280,7 +280,9 @@ class CultivatorState:
         """
         Persists the current cultivator state to the SQLite database.
         Wealth and items are stored inside the JSON vault column.
+        Guarantees connection is closed in finally block.
         """
+        conn = None
         try:
             conn = get_db_connection()
             cursor = conn.cursor()
@@ -332,23 +334,29 @@ class CultivatorState:
                 json.dumps(self.aperture), json.dumps(self.vault), self.current_region_id, now
             ))
             conn.commit()
-            conn.close()
         except Exception as e:
             print(f"Failed to persist cultivator state to DB: {e}")
+        finally:
+            if conn:
+                conn.close()
 
     def load_from_db(self) -> bool:
         """
         Loads cultivator state from SQLite database.
         If found, immediately applies retroactive stamina for elapsed offline time.
+        Guarantees connection is closed in finally block.
         """
+        conn = None
         try:
             conn = get_db_connection()
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM cultivator_state WHERE id = ?", (self.character_id,))
             row = cursor.fetchone()
-            conn.close()
             
             if not row:
+                if conn:
+                    conn.close()
+                    conn = None
                 self.save_to_db()
                 return False
                 
@@ -412,6 +420,9 @@ class CultivatorState:
         except Exception as e:
             print(f"Error loading from DB: {e}")
             return False
+        finally:
+            if conn:
+                conn.close()
 
     def update_stamina_passive(self) -> None:
         """
