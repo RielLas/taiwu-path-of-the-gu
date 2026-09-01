@@ -5,6 +5,7 @@ import { useCultivatorStore } from '../../hooks/useCultivator';
 import type { Encounter } from '../../hooks/useWorldStore';
 import { useCombatStore } from '../../hooks/useCombat';
 import { playJadeClinkSound, playBrushSound } from '../../hooks/useAudio';
+import WayStationModal from './WayStationModal';
 
 interface MapGridProps {
   initialNodeData?: any;
@@ -12,6 +13,24 @@ interface MapGridProps {
 }
 
 const BIOME_STYLES: Record<string, { bg: string; icon: string; border: string; glow?: string }> = {
+  'Way Station': { 
+    bg: 'bg-gradient-to-br from-amber-950 via-[#2e1d0c] to-amber-900', 
+    icon: '🏮', 
+    border: 'border-2 border-amber-400 animate-pulse', 
+    glow: 'shadow-[0_0_30px_rgba(245,158,11,0.95)] ring-2 ring-amber-400/80' 
+  },
+  'way_station': { 
+    bg: 'bg-gradient-to-br from-amber-950 via-[#2e1d0c] to-amber-900', 
+    icon: '🏮', 
+    border: 'border-2 border-amber-400 animate-pulse', 
+    glow: 'shadow-[0_0_30px_rgba(245,158,11,0.95)] ring-2 ring-amber-400/80' 
+  },
+  'caravan': { 
+    bg: 'bg-gradient-to-br from-amber-950 via-[#2e1d0c] to-amber-900', 
+    icon: '🏮', 
+    border: 'border-2 border-amber-400 animate-pulse', 
+    glow: 'shadow-[0_0_30px_rgba(245,158,11,0.95)] ring-2 ring-amber-400/80' 
+  },
   'Faction Outpost': { 
     bg: 'bg-gradient-to-br from-[#2a1a10] via-[#1a1410] to-[#251508]', 
     icon: '🏯', 
@@ -40,10 +59,21 @@ const BIOME_STYLES: Record<string, { bg: string; icon: string; border: string; g
 };
 
 export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
-  const { grid, playerLocation, enforcer, fetchLocalGrid, loadInitialNodeData, travel } = useWorldStore();
+  const { 
+    grid, 
+    playerLocation, 
+    enforcer, 
+    currentRegionName,
+    isWayStationModalOpen,
+    setWayStationModalOpen,
+    fetchLocalGrid, 
+    loadInitialNodeData, 
+    travel 
+  } = useWorldStore();
+  
   const { cultivator, captureWildGu, fetchAperture } = useCultivatorStore();
 
-  const [logs, setLogs] = useState<string[]>(['> Primeval Aperture steady. Ready to explore.']);
+  const [logs, setLogs] = useState<string[]>(['> Primeval Aperture steady. Ready to explore 30x30 regional sector.']);
   const [activeEncounter, setActiveEncounter] = useState<Encounter | null>(null);
   const [encounterResult, setEncounterResult] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -54,8 +84,8 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
     if (initialNodeData) {
       loadInitialNodeData(initialNodeData);
     } else if (grid.length === 0) {
-      // Fallback: actively request sector 1 grid from the backend
-      fetchLocalGrid(1);
+      // Fallback: actively request regional grid from the backend
+      fetchLocalGrid('southern_border_gu_yue');
     }
   }, [initialNodeData, loadInitialNodeData, fetchLocalGrid, grid.length]);
 
@@ -88,11 +118,33 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
     setActiveEncounter(null);
   };
 
+  const isWayStationTile = (tile: any) => {
+    if (!tile) return false;
+    return (
+      tile.type === 'way_station' ||
+      tile.type === 'Way Station' ||
+      tile.type === 'caravan' ||
+      tile.terrain === 'way_station' ||
+      tile.terrain === 'Way Station' ||
+      tile.terrain === 'caravan' ||
+      Boolean(tile.is_way_station) ||
+      Boolean(tile.is_caravan) ||
+      (tile.x === 15 && tile.y === 15)
+    );
+  };
+
   const handleTravel = async (targetX: number, targetY: number) => {
     if (activeEncounter) return; // Block move while encounter is unresolved
     try {
       const { encounter, logs: newLogs } = await travel(targetX, targetY);
       setLogs(prev => [...prev, ...newLogs]);
+
+      // Check if player stepped on or arrived at a Way Station
+      const currentTile = grid.find((t) => t.x === targetX && t.y === targetY);
+      if (isWayStationTile(currentTile)) {
+        setLogs(prev => [...prev, '> 🏮 Arrived at Regional Way Station. Inter-regional caravan transit available.']);
+        setWayStationModalOpen(true);
+      }
 
       if (encounter) {
         if (encounter.is_interception && encounter.enemy) {
@@ -133,7 +185,7 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
       await fetchAperture();
       setEncounterResult(`✨ Harvested +${stones} Primeval Stones!`);
       setLogs(prev => [...prev, `> Harvested: ${activeEncounter?.title || 'Resource'} (+${stones} Primeval Stones)`]);
-    } catch (err: any) {
+    } catch {
       setEncounterResult('✨ Resource gathered.');
     } finally {
       setIsSubmitting(false);
@@ -207,20 +259,22 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
     setActiveEncounter(null);
   };
 
+  const isPlayerOnWayStation = playerLocation.x === 15 && playerLocation.y === 15;
+
   return (
     <div className="absolute inset-0 bg-[#12100d] z-40 flex flex-col md:flex-row font-serif overflow-hidden select-none">
 
-      {/* LEFT / CENTER VIEWPORT: 2.5D Isometric Transform Canvas */}
+      {/* LEFT / CENTER VIEWPORT: 2.5D Isometric Transform Canvas (30x30 Finite Grid) */}
       <div className="flex-1 relative h-full w-full overflow-hidden bg-[#0d0b09]">
 
-        {/* Subtle Ambient Vignette & Texture */}
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_transparent_30%,_rgba(10,9,7,0.85)_100%)] pointer-events-none z-10"></div>
+        {/* Atmospheric Ambient Vignette & Background Textures */}
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_transparent_20%,_rgba(8,7,5,0.92)_100%)] pointer-events-none z-10"></div>
         <div className="absolute inset-0 opacity-15 bg-[url('https://www.transparenttextures.com/patterns/black-scales.png')] pointer-events-none z-10"></div>
 
         <TransformWrapper
-          initialScale={0.8}
-          minScale={1.0}
-          maxScale={2.0}
+          initialScale={0.7}
+          minScale={0.35}
+          maxScale={2.5}
           centerOnInit={true}
           limitToBounds={false}
           wheel={{ step: 0.08 }}
@@ -230,42 +284,58 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
               {/* Floating Camera & Sector Controls */}
               <div className="absolute top-4 left-4 z-20 flex items-center gap-2 bg-[#12100d]/90 backdrop-blur border border-[#2a2620] px-3.5 py-2 rounded-xl shadow-2xl">
                 <span className="text-[10px] uppercase font-sans tracking-[0.2em] text-[#c89b3c] font-bold">
-                  Sector Grid (2.5D) • [{playerLocation.x}, {playerLocation.y}]
+                  {currentRegionName} • [{playerLocation.x}, {playerLocation.y}]
                 </span>
                 <div className="w-px h-4 bg-[#2a2620] mx-1"></div>
                 <button
                   onClick={() => zoomIn()}
-                  className="w-6 h-6 flex items-center justify-center text-xs text-[#8a8275] hover:text-[#d5cfc4] rounded hover:bg-[#1a1814] font-bold transition-colors"
+                  className="w-6 h-6 flex items-center justify-center text-xs text-[#8a8275] hover:text-[#d5cfc4] rounded hover:bg-[#1a1814] font-bold transition-colors cursor-pointer"
                   title="Zoom In"
                 >
                   ＋
                 </button>
                 <button
                   onClick={() => zoomOut()}
-                  className="w-6 h-6 flex items-center justify-center text-xs text-[#8a8275] hover:text-[#d5cfc4] rounded hover:bg-[#1a1814] font-bold transition-colors"
+                  className="w-6 h-6 flex items-center justify-center text-xs text-[#8a8275] hover:text-[#d5cfc4] rounded hover:bg-[#1a1814] font-bold transition-colors cursor-pointer"
                   title="Zoom Out"
                 >
                   －
                 </button>
                 <button
                   onClick={() => resetTransform()}
-                  className="text-[10px] text-[#8a8275] hover:text-[#c89b3c] px-2 py-0.5 rounded hover:bg-[#1a1814] uppercase tracking-wider font-bold transition-colors"
+                  className="text-[10px] text-[#8a8275] hover:text-[#c89b3c] px-2 py-0.5 rounded hover:bg-[#1a1814] uppercase tracking-wider font-bold transition-colors cursor-pointer"
                   title="Reset Camera"
                 >
                   Reset
                 </button>
                 <div className="w-px h-4 bg-[#2a2620] mx-1"></div>
+                
+                {/* Way Station Inter-Regional Caravan Transit Action Button */}
+                <button
+                  onClick={() => { playBrushSound(); setWayStationModalOpen(true); }}
+                  className={`text-[10px] px-2.5 py-0.5 rounded uppercase tracking-wider font-bold border transition-all flex items-center gap-1.5 cursor-pointer ${
+                    isPlayerOnWayStation 
+                      ? 'bg-amber-950 text-amber-300 border-amber-500 animate-pulse shadow-[0_0_12px_rgba(245,158,11,0.5)]'
+                      : 'bg-[#1a1814] text-[#8a8275] hover:text-[#c89b3c] border-[#2a2620]'
+                  }`}
+                  title="Open Way Station Caravan Transit Router"
+                >
+                  <span>🏮</span>
+                  <span>Way Station</span>
+                </button>
+
+                <div className="w-px h-4 bg-[#2a2620] mx-1"></div>
                 <button
                   onClick={() => { playBrushSound(); onExitNode?.(); }}
-                  className="text-[10px] text-[#8a8275] hover:text-[#c89b3c] px-2 py-0.5 rounded hover:bg-[#1a1814] uppercase tracking-wider font-bold border border-[#2a2620] transition-colors"
+                  className="text-[10px] text-[#8a8275] hover:text-[#c89b3c] px-2 py-0.5 rounded hover:bg-[#1a1814] uppercase tracking-wider font-bold border border-[#2a2620] transition-colors cursor-pointer"
                 >
                   Exit Node
                 </button>
               </div>
 
-              {/* Dynamic Hunter Matrix: Predator Pursuit Banner (Relocated below header) */}
+              {/* Dynamic Hunter Matrix: Predator Pursuit Banner */}
               {enforcer && enforcer.active && enforcer.status !== 'defeated' && (
-                <div className="absolute top-24 right-8 z-30 flex items-center gap-3 bg-gradient-to-r from-red-950/95 via-[#1a0808]/95 to-red-950/95 border-2 border-red-600/80 px-4 py-2.5 rounded-2xl shadow-[0_8px_32px_rgba(220,38,38,0.7)] backdrop-blur-md animate-pulse">
+                <div className="absolute top-20 right-8 z-30 flex items-center gap-3 bg-gradient-to-r from-red-950/95 via-[#1a0808]/95 to-red-950/95 border-2 border-red-600/80 px-4 py-2.5 rounded-2xl shadow-[0_8px_32px_rgba(220,38,38,0.7)] backdrop-blur-md animate-pulse">
                   <span className="text-xl animate-bounce">⚖️</span>
                   <div>
                     <div className="flex items-center gap-2">
@@ -286,22 +356,53 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
               {/* Pan/Zoom Canvas Area */}
               <TransformComponent
                 wrapperClass="!w-full !h-full cursor-grab active:cursor-grabbing"
-                contentClass="!w-full !h-full flex items-center justify-center min-w-[1400px] min-h-[1200px]"
+                contentClass="!w-full !h-full flex items-center justify-center min-w-[2200px] min-h-[1900px]"
               >
                 {/* 2.5D Isometric Tilt Wrapper */}
                 <div
-                  className="relative p-12 transition-transform duration-200 ease-out"
+                  className="relative p-16 transition-transform duration-200 ease-out"
                   style={{
                     transform: 'rotateX(60deg) rotateZ(-45deg)',
                     transformStyle: 'preserve-3d',
                   }}
                 >
-                  {/* The 15x15 Tile Grid Plane */}
+                  {/* Atmospheric Void Fog & Boundary Framing around the 30x30 perimeter [0..29, 0..29] */}
+                  <div className="absolute -inset-8 border-4 border-[#3b3226] rounded-3xl pointer-events-none shadow-[inset_0_0_80px_rgba(0,0,0,0.95),0_0_100px_rgba(0,0,0,0.95)]"></div>
+                  <div className="absolute -inset-16 bg-gradient-to-r from-[#070605] via-transparent to-[#070605] opacity-80 blur-xl pointer-events-none"></div>
+                  <div className="absolute -inset-16 bg-gradient-to-b from-[#070605] via-transparent to-[#070605] opacity-80 blur-xl pointer-events-none"></div>
+                  
+                  {/* Coordinate Boundary Indicators */}
+                  <div 
+                    className="absolute -top-7 left-1/2 -translate-x-1/2 text-[8px] font-mono font-bold text-[#8a8275] tracking-[0.2em] uppercase bg-[#0d0b09] px-3 py-0.5 rounded-full border border-[#2a2620] shadow pointer-events-none"
+                    style={{ transform: 'rotateZ(45deg) rotateX(-60deg)' }}
+                  >
+                    North Boundary • Y: 0
+                  </div>
+                  <div 
+                    className="absolute -bottom-7 left-1/2 -translate-x-1/2 text-[8px] font-mono font-bold text-[#8a8275] tracking-[0.2em] uppercase bg-[#0d0b09] px-3 py-0.5 rounded-full border border-[#2a2620] shadow pointer-events-none"
+                    style={{ transform: 'rotateZ(45deg) rotateX(-60deg)' }}
+                  >
+                    South Boundary • Y: 29
+                  </div>
+                  <div 
+                    className="absolute top-1/2 -left-8 -translate-y-1/2 text-[8px] font-mono font-bold text-[#8a8275] tracking-[0.2em] uppercase bg-[#0d0b09] px-3 py-0.5 rounded-full border border-[#2a2620] shadow pointer-events-none"
+                    style={{ transform: 'rotateZ(45deg) rotateX(-60deg)' }}
+                  >
+                    West Boundary • X: 0
+                  </div>
+                  <div 
+                    className="absolute top-1/2 -right-8 -translate-y-1/2 text-[8px] font-mono font-bold text-[#8a8275] tracking-[0.2em] uppercase bg-[#0d0b09] px-3 py-0.5 rounded-full border border-[#2a2620] shadow pointer-events-none"
+                    style={{ transform: 'rotateZ(45deg) rotateX(-60deg)' }}
+                  >
+                    East Boundary • X: 29
+                  </div>
+
+                  {/* The 30x30 Tile Grid Plane (900 finite tiles) */}
                   <div
-                    className="grid gap-1.5 p-6 bg-[#0a0907]/95 rounded-2xl border-2 border-[#2a2620] shadow-[0_0_80px_rgba(0,0,0,0.95)]"
+                    className="grid gap-1 p-5 bg-[#0a0907]/95 rounded-2xl border-2 border-[#2a2620] shadow-[0_0_80px_rgba(0,0,0,0.95)]"
                     style={{
                       display: 'grid',
-                      gridTemplateColumns: 'repeat(15, minmax(0, 1fr))',
+                      gridTemplateColumns: 'repeat(30, minmax(0, 1fr))',
                       transformStyle: 'preserve-3d'
                     }}
                   >
@@ -310,24 +411,35 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
                       const isEnforcerHere = Boolean(enforcer && enforcer.active && enforcer.status !== 'defeated' && tile.x === enforcer.pos[0] && tile.y === enforcer.pos[1]);
                       const isAdjacent = Math.abs(tile.x - playerLocation.x) <= 1 && Math.abs(tile.y - playerLocation.y) <= 1 && !isPlayerHere;
                       
+                      const isWayStation = isWayStationTile(tile);
                       const isFaction = tile.type === 'Faction Outpost' || tile.terrain === 'Faction Outpost' || tile.is_faction_node;
                       const isSpring = tile.type === 'Spirit Spring' || tile.terrain === 'Spirit Spring' || tile.is_spirit_spring;
-                      const styleKey = isFaction ? 'Faction Outpost' : isSpring ? 'Spirit Spring' : (tile.type || tile.terrain || tile.biome || 'Wilderness');
+                      
+                      const styleKey = isWayStation ? 'Way Station' : isFaction ? 'Faction Outpost' : isSpring ? 'Spirit Spring' : (tile.type || tile.terrain || tile.biome || 'Wilderness');
                       const style = BIOME_STYLES[styleKey] || (tile.biome ? BIOME_STYLES[tile.biome] : undefined) || BIOME_STYLES['Wilderness'];
+
+                      const handleTileClick = () => {
+                        if (isAdjacent) {
+                          handleTravel(tile.x, tile.y);
+                        } else if (isWayStation && (isPlayerHere || isAdjacent)) {
+                          playBrushSound();
+                          setWayStationModalOpen(true);
+                        }
+                      };
 
                       return (
                         <div
                           key={idx}
-                          onClick={() => isAdjacent ? handleTravel(tile.x, tile.y) : null}
+                          onClick={handleTileClick}
                           className={`
-                            relative w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 aspect-square border rounded flex items-center justify-center transition-all duration-300
+                            relative w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 aspect-square border rounded flex items-center justify-center transition-all duration-300
                             ${isEnforcerHere ? 'bg-gradient-to-br from-red-950 via-rose-950 to-red-900 border-2 border-red-500 shadow-[0_0_30px_rgba(239,68,68,0.95)] ring-2 ring-red-500 z-25 animate-pulse' : !tile.discovered ? 'bg-[#0a0907] border-[#1a1814]' : `${style.bg} ${style.border}`}
-                            ${!tile.discovered && !isEnforcerHere ? 'opacity-35' : 'opacity-100 shadow-lg'}
-                            ${(isSpring || isFaction) && tile.discovered ? (style.glow || '') : ''}
+                            ${!tile.discovered && !isEnforcerHere ? 'opacity-35' : 'opacity-100 shadow-md'}
+                            ${(isSpring || isFaction || isWayStation) && tile.discovered ? (style.glow || '') : ''}
                             ${isPlayerHere ? 'ring-2 ring-[#c89b3c] shadow-[0_0_25px_rgba(200,155,60,0.9)] z-30 scale-110' : ''}
                             ${isAdjacent ? 'cursor-pointer hover:border-[#c89b3c] hover:scale-105 hover:z-20 animate-pulse border-gold/40' : 'cursor-default'}
                           `}
-                          title={`${isEnforcerHere ? `⚔️ ${enforcer?.name} (${enforcer?.status})` : isFaction ? `Faction Outpost: ${tile.faction || 'Sect Territory'}` : isSpring ? 'Natural Jade Spirit Spring' : tile.type} (${tile.x}, ${tile.y})`}
+                          title={`${isEnforcerHere ? `⚔️ ${enforcer?.name} (${enforcer?.status})` : isWayStation ? '🏮 Way Station (Caravan Transit Node)' : isFaction ? `Faction Outpost: ${tile.faction || 'Sect Territory'}` : isSpring ? 'Natural Jade Spirit Spring' : tile.type} (${tile.x}, ${tile.y})`}
                           style={{ transformStyle: 'preserve-3d' }}
                         >
                           {/* Billboard / Counter-Rotate Icon Container */}
@@ -340,23 +452,29 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
                           >
                             {isPlayerHere ? (
                               <div className="relative flex flex-col items-center">
-                                <span className="text-xl md:text-2xl drop-shadow-[0_4px_10px_rgba(200,155,60,1)] text-[#c89b3c] font-bold animate-bounce">
+                                <span className="text-lg md:text-xl drop-shadow-[0_4px_10px_rgba(200,155,60,1)] text-[#c89b3c] font-bold animate-bounce">
                                   🚶
                                 </span>
-                                <div className="w-3 h-1 bg-[#c89b3c]/60 rounded-full blur-[1px] mt-0.5"></div>
+                                <div className="w-2.5 h-0.5 bg-[#c89b3c]/60 rounded-full blur-[1px] mt-0.5"></div>
                               </div>
                             ) : isEnforcerHere ? (
                               <div className="relative flex flex-col items-center">
-                                <span className="text-xl md:text-2xl drop-shadow-[0_4px_15px_rgba(239,68,68,1)] text-red-400 font-bold animate-pulse">
+                                <span className="text-lg md:text-xl drop-shadow-[0_4px_15px_rgba(239,68,68,1)] text-red-400 font-bold animate-pulse">
                                   🗡️
                                 </span>
-                                <div className="w-4 h-1 bg-red-600 rounded-full blur-[1px] mt-0.5 animate-pulse"></div>
+                                <div className="w-3 h-0.5 bg-red-600 rounded-full blur-[1px] mt-0.5 animate-pulse"></div>
                                 <div className="absolute -top-5 whitespace-nowrap bg-black/95 border border-red-500/80 px-1.5 py-0.5 rounded text-[7px] text-red-300 font-bold uppercase tracking-wider shadow-lg">
                                   ⚔️ Enforcer ({Math.round(enforcer?.stamina || 0)}⚡)
                                 </div>
                               </div>
+                            ) : isWayStation ? (
+                              <div className="relative flex flex-col items-center">
+                                <span className="text-sm md:text-base opacity-100 drop-shadow-[0_0_8px_rgba(245,158,11,0.9)] animate-bounce">
+                                  🏮
+                                </span>
+                              </div>
                             ) : tile.discovered ? (
-                              <span className={`text-sm md:text-base opacity-90 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] ${isSpring ? 'scale-125 animate-bounce' : ''}`}>
+                              <span className={`text-xs md:text-sm opacity-90 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] ${isSpring ? 'scale-115 animate-bounce' : ''}`}>
                                 {style.icon}
                               </span>
                             ) : null}
@@ -424,8 +542,9 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
         </div>
 
         <div className="p-6 flex-1 flex flex-col overflow-hidden">
-          <h3 className="text-sm uppercase tracking-[0.2em] text-[#5c2424] font-bold mb-3 border-b border-[#5c2424]/30 pb-1">
-            Destiny Logs
+          <h3 className="text-sm uppercase tracking-[0.2em] text-[#5c2424] font-bold mb-3 border-b border-[#5c2424]/30 pb-1 flex items-center justify-between">
+            <span>Destiny Logs</span>
+            <span className="text-[10px] font-mono text-[#8a8275] font-normal">30x30 Matrix</span>
           </h3>
           <div className="flex-1 overflow-y-auto text-xs text-[#d5cfc4] space-y-2 font-sans pr-1 custom-scrollbar">
             {logs.map((log, idx) => (
@@ -699,6 +818,12 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
           </div>
         </div>
       )}
+
+      {/* Way Station Inter-Regional Caravan Transit Modal */}
+      <WayStationModal 
+        isOpen={isWayStationModalOpen} 
+        onClose={() => setWayStationModalOpen(false)} 
+      />
     </div>
   );
 }

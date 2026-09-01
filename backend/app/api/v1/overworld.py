@@ -15,22 +15,22 @@ region_tile_cache: Dict[int, list] = {}
 @router.get("/")
 async def get_overworld():
     """
-    Returns overworld state and the 15x15 array of WorldNode objects.
+    Returns overworld state and the 30x30 array of WorldNode objects.
     Actively invokes generate_region if it does not already exist in memory.
     """
-    grid_id = 1
-    if grid_id not in region_tile_cache:
-        region_tile_cache[grid_id] = generate_region(
-            region_id=grid_id,
-            width=15,
-            height=15,
+    region_id = getattr(player_cultivator, "current_region_id", "southern_border_gu_yue")
+    if region_id not in region_tile_cache:
+        region_tile_cache[region_id] = generate_region(
+            region_id=region_id,
+            width=30,
+            height=30,
             player_start=player_cultivator.player_pos
         )
     return {
         "status": "success",
         "regions": get_all_regions(),
-        "grid": region_tile_cache[grid_id],
-        "tiles": region_tile_cache[grid_id],
+        "grid": region_tile_cache[region_id],
+        "tiles": region_tile_cache[region_id],
         "player_pos": player_cultivator.player_pos,
         "cultivator": player_cultivator.get_stats(),
         "current_node": player_cultivator.current_node if hasattr(player_cultivator, 'current_node') else None
@@ -41,20 +41,20 @@ async def list_regions():
     """
     Returns all 5 overworld regions with their node counts and positions, plus default grid.
     """
-    grid_id = 1
-    if grid_id not in region_tile_cache:
-        region_tile_cache[grid_id] = generate_region(
-            region_id=grid_id,
-            width=15,
-            height=15,
+    region_id = getattr(player_cultivator, "current_region_id", "southern_border_gu_yue")
+    if region_id not in region_tile_cache:
+        region_tile_cache[region_id] = generate_region(
+            region_id=region_id,
+            width=30,
+            height=30,
             player_start=player_cultivator.player_pos
         )
     regions = get_all_regions()
     return {
         "status": "success",
         "regions": regions,
-        "grid": region_tile_cache[grid_id],
-        "tiles": region_tile_cache[grid_id],
+        "grid": region_tile_cache[region_id],
+        "tiles": region_tile_cache[region_id],
         "player_pos": player_cultivator.player_pos,
         "cultivator": player_cultivator.get_stats(),
         "current_node": player_cultivator.current_node if hasattr(player_cultivator, 'current_node') else None
@@ -77,7 +77,7 @@ async def list_nodes(region_id: str):
 @router.post("/regions/{region_id}/nodes/{node_id}/enter")
 async def enter_node(region_id: str, node_id: str):
     """
-    Enter an explorable node. Returns the 15x15 local tile grid for the node.
+    Enter an explorable node. Returns the 30x30 local tile grid for the node.
     Unlocked nodes only (starter nodes are always open).
     """
     node = get_node(region_id, node_id)
@@ -88,17 +88,17 @@ async def enter_node(region_id: str, node_id: str):
         raise HTTPException(status_code=403, detail=f"'{node['name']}' is locked. Cultivate stronger to unlock this territory.")
 
     # Generate or retrieve the local tile grid for this node
-    grid_id = node["region_id"]
+    grid_id = node.get("region_id", region_id)
     if grid_id not in region_tile_cache:
         region_tile_cache[grid_id] = generate_region(
             region_id=grid_id,
-            width=15,
-            height=15,
-            player_start=[7, 7]
+            width=30,
+            height=30,
+            player_start=[15, 15]
         )
 
     # Reset player position to node entry point
-    player_cultivator.player_pos = [7, 7]
+    player_cultivator.player_pos = [15, 15]
     
     # Store current node on the cultivator state
     player_cultivator.current_node = {

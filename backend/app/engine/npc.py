@@ -72,7 +72,7 @@ class RighteousEnforcer:
             }
         ]
 
-    def spawn(self, player_pos: List[int], grid_width: int = 15, grid_height: int = 15, player_rank: int = 1) -> None:
+    def spawn(self, player_pos: List[int], grid_width: int = 30, grid_height: int = 30, player_rank: int = 1) -> None:
         """
         Spawns the Enforcer at the furthest edge corner from the player's current position.
         """
@@ -241,7 +241,7 @@ class EnforcerManager:
         if should_spawn:
             if not self.enforcer.active or self.enforcer.status == "defeated":
                 if auto_spawn:
-                    self.enforcer.spawn(player_cultivator.player_pos, 15, 15, player_cultivator.rank)
+                    self.enforcer.spawn(player_cultivator.player_pos, 30, 30, player_cultivator.rank)
             return self.enforcer.to_dict()
         else:
             if self.enforcer.active:

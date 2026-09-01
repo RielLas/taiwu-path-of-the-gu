@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Query, Request
 from typing import List, Dict, Any, Optional
-from app.engine.world_gen import generate_region, generate_tile_encounter
+from app.engine.world_gen import generate_region, generate_tile_encounter, MACRO_REGIONS, LEGACY_REGION_MAP
 from app.engine.cultivator import player_cultivator
 from app.engine.overworld import get_all_regions, get_region_nodes, get_node
 from app.engine.npc import enforcer_manager
@@ -8,7 +8,17 @@ from app.engine.npc import enforcer_manager
 router = APIRouter()
 
 # In-memory region cache
-region_cache: Dict[int, List[Dict[str, Any]]] = {}
+region_cache: Dict[str, List[Dict[str, Any]]] = {}
+
+def resolve_region_id(region_id: Any) -> str:
+    if isinstance(region_id, int) and region_id in LEGACY_REGION_MAP:
+        return LEGACY_REGION_MAP[region_id]
+    s = str(region_id)
+    if s in LEGACY_REGION_MAP:
+        return LEGACY_REGION_MAP[s]
+    if s in MACRO_REGIONS:
+        return s
+    return getattr(player_cultivator, "current_region_id", "southern_border_gu_yue")
 
 # ─── Overworld endpoints (live via /api/v1/world/) ───────────────────────────
 
@@ -20,25 +30,26 @@ async def list_regions():
 @router.get("/regions/{region_id}/nodes")
 async def list_nodes(region_id: str):
     """Returns explorable nodes within a given region."""
-    nodes = get_region_nodes(region_id)
+    canonical_id = resolve_region_id(region_id)
+    nodes = get_region_nodes(canonical_id)
     if nodes is None:
         raise HTTPException(status_code=404, detail=f"Region '{region_id}' not found.")
-    return {"status": "success", "region_id": region_id, "nodes": nodes}
+    return {"status": "success", "region_id": canonical_id, "nodes": nodes}
 
 @router.post("/regions/{region_id}/nodes/{node_id}/enter")
 async def enter_node(region_id: str, node_id: str):
-    """Enter an explorable node and load its 15x15 tile grid."""
-    node = get_node(region_id, node_id)
+    """Enter an explorable node and load its 30x30 tile grid."""
+    canonical_id = resolve_region_id(region_id)
+    node = get_node(canonical_id, node_id)
     if not node:
         raise HTTPException(status_code=404, detail=f"Node '{node_id}' not found.")
     if not node.get("unlocked", False):
         raise HTTPException(status_code=403, detail=f"'{node['name']}' is sealed. Cultivate stronger to unlock.")
     
-    grid_id = node["region_id"]
-    tiles = get_or_create_region(grid_id)
-    reveal_around(tiles, 7, 7)
-    player_cultivator.player_pos = [7, 7]
-    player_cultivator.current_node = {"node_id": node_id, "node_name": node["name"], "region_id": region_id, "grid_id": grid_id}
+    tiles = get_or_create_region(canonical_id)
+    reveal_around(tiles, 15, 15)
+    player_cultivator.player_pos = [15, 15]
+    player_cultivator.current_node = {"node_id": node_id, "node_name": node["name"], "region_id": canonical_id}
 
     enforcer_info = enforcer_manager.check_and_update(player_cultivator, auto_spawn=True)
 
@@ -60,15 +71,16 @@ async def exit_to_overworld():
     return {"status": "success", "message": "Returned to overworld.", "regions": get_all_regions()}
 
 
-def get_or_create_region(region_id: int) -> List[Dict[str, Any]]:
-    if region_id not in region_cache:
-        region_cache[region_id] = generate_region(
-            region_id=region_id, 
-            width=15, 
-            height=15, 
+def get_or_create_region(region_id: Any) -> List[Dict[str, Any]]:
+    canonical_id = resolve_region_id(region_id)
+    if canonical_id not in region_cache:
+        region_cache[canonical_id] = generate_region(
+            region_id=canonical_id, 
+            width=30, 
+            height=30, 
             player_start=player_cultivator.player_pos
         )
-    return region_cache[region_id]
+    return region_cache[canonical_id]
 
 def reveal_around(tiles: List[Dict[str, Any]], px: int, py: int, radius: int = 1):
     """Reveals tiles in radius around (px, py)."""
@@ -78,22 +90,111 @@ def reveal_around(tiles: List[Dict[str, Any]], px: int, py: int, radius: int = 1
             tile["discovered"] = True
 
 @router.get("/region/{region_id}")
-async def get_region(region_id: int):
+async def get_region(region_id: str):
     """
-    Fetch the 15x15 region map.
+    Fetch the 30x30 region map.
     Returns both 'tiles' and 'grid' for frontend compatibility.
     """
-    tiles = get_or_create_region(region_id)
+    canonical_id = resolve_region_id(region_id)
+    tiles = get_or_create_region(canonical_id)
     reveal_around(tiles, player_cultivator.player_pos[0], player_cultivator.player_pos[1])
     enforcer_info = enforcer_manager.check_and_update(player_cultivator, auto_spawn=True)
+    region_meta = MACRO_REGIONS.get(canonical_id, MACRO_REGIONS["southern_border_gu_yue"])
     
     return {
-        "region_id": region_id,
-        "width": 15,
-        "height": 15,
+        "status": "success",
+        "region_id": canonical_id,
+        "region_name": region_meta["name"],
+        "width": 30,
+        "height": 30,
         "player_pos": player_cultivator.player_pos,
         "tiles": tiles,
         "grid": tiles,  # Alias to prevent frontend undefined errors
+        "cultivator": player_cultivator.get_stats(),
+        "enforcer": enforcer_info
+    }
+
+@router.post("/travel")
+async def travel_region(payload: Dict[str, Any]):
+    """
+    Inter-Regional Caravan Transit:
+    Accepts {"target_region_id": str}
+    - Validates target_region_id in MACRO_REGIONS
+    - Validates target_region_id != player_cultivator.current_region_id
+    - Checks player_cultivator.stamina >= 40 (raise HTTP 400 if insufficient)
+    - Checks player_cultivator.spirit_stones >= 100 (raise HTTP 400 if insufficient)
+    - Deducts 40 Stamina and 100 Spirit Stones
+    - Sets player_cultivator.current_region_id = target_region_id
+    - Resets player_cultivator.player_pos = [15, 15]
+    - Saves to DB atomically via player_cultivator.save_to_db()
+    - Generates/fetches new 30x30 region grid, updates enforcer matrix
+    - Returns 200 response with message, current_region_id, region_name, player_pos, stamina, spirit_stones, grid, and cultivator
+    """
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="Invalid request body. Expected JSON object.")
+
+    target_region_id = payload.get("target_region_id")
+    if target_region_id is None:
+        target_region_id = payload.get("target_region")
+
+    if not isinstance(target_region_id, str) or not target_region_id.strip():
+        raise HTTPException(status_code=400, detail="Missing or invalid 'target_region_id' parameter. Must be a string.")
+
+    target_region_id = target_region_id.strip()
+
+    if target_region_id in LEGACY_REGION_MAP:
+        target_region_id = LEGACY_REGION_MAP[target_region_id]
+
+    if target_region_id not in MACRO_REGIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid target region '{target_region_id}'. Available macro-regions: {list(MACRO_REGIONS.keys())}"
+        )
+
+    if target_region_id == player_cultivator.current_region_id:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Already located in region '{target_region_id}'. Cannot transit to current region."
+        )
+
+    player_cultivator.update_stamina_passive()
+    if player_cultivator.stamina < 40.0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Insufficient Stamina for inter-regional caravan travel! Required: 40, Available: {player_cultivator.stamina:.1f}."
+        )
+
+    if player_cultivator.spirit_stones < 100:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Insufficient Primeval Stones for caravan transit toll! Required: 100, Available: {player_cultivator.spirit_stones}."
+        )
+
+    # Deduct travel toll costs
+    player_cultivator.stamina = max(0.0, round(player_cultivator.stamina - 40.0, 1))
+    player_cultivator.spirit_stones -= 100
+    player_cultivator.current_region_id = target_region_id
+    player_cultivator.player_pos = [15, 15]
+    player_cultivator.current_node = None
+    player_cultivator.save_to_db()
+
+    # Generate/fetch target 30x30 region grid and reveal initial area around [15, 15]
+    tiles = get_or_create_region(target_region_id)
+    reveal_around(tiles, 15, 15)
+
+    enforcer_info = enforcer_manager.check_and_update(player_cultivator, auto_spawn=True)
+    region_meta = MACRO_REGIONS[target_region_id]
+
+    return {
+        "status": "success",
+        "message": f"Caravan transit completed. Welcome to {region_meta['name']}!",
+        "current_region_id": target_region_id,
+        "region_name": region_meta["name"],
+        "player_pos": player_cultivator.player_pos,
+        "stamina": player_cultivator.stamina,
+        "spirit_stones": player_cultivator.spirit_stones,
+        "grid": tiles,
+        "tiles": tiles,
         "cultivator": player_cultivator.get_stats(),
         "enforcer": enforcer_info
     }
@@ -105,10 +206,11 @@ async def move_player(
     dy: Optional[int] = Query(None)
 ):
     """
-    Moves player across the exploration grid.
+    Moves player across the 30x30 exploration grid.
     Supports both query parameters (?dx=0&dy=-1) and JSON body.
+    Enforces strict coordinate boundaries [0..29, 0..29].
     """
-    region_id = 1
+    region_id = player_cultivator.current_region_id
     target_dx = dx
     target_dy = dy
     
@@ -137,6 +239,13 @@ async def move_player(
     new_x = player_cultivator.player_pos[0] + step_x
     new_y = player_cultivator.player_pos[1] + step_y
     
+    # Strictly enforce 30x30 boundaries [0..29, 0..29]
+    if new_x < 0 or new_x > 29 or new_y < 0 or new_y > 29:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot traverse beyond regional boundary [0..29, 0..29]"
+        )
+    
     # Check Stamina for movement (2 Stamina per step)
     player_cultivator.update_stamina_passive()
     if player_cultivator.stamina < 2.0:
@@ -147,8 +256,10 @@ async def move_player(
         
     player_cultivator.stamina = max(0.0, round(player_cultivator.stamina - 2.0, 1))
     player_cultivator.player_pos = [new_x, new_y]
+    player_cultivator.save_to_db()
     
-    tiles = get_or_create_region(region_id)
+    canonical_id = resolve_region_id(region_id)
+    tiles = get_or_create_region(canonical_id)
     reveal_around(tiles, new_x, new_y)
     
     # Locate current tile
@@ -156,7 +267,26 @@ async def move_player(
     terrain = current_tile["type"] if current_tile else "Wilderness"
     
     # Generate encounter
-    if current_tile and current_tile.get("is_faction_node"):
+    if current_tile and current_tile.get("is_way_station"):
+        encounter = {
+            "type": "way_station",
+            "title": "Way Station Caravan Hub",
+            "desc": "You have arrived at the inter-regional Caravan Hub. Way Station masters offer safe passage to other macro-regions.",
+            "is_way_station": True,
+            "available_destinations": [
+                {
+                    "id": r_id,
+                    "name": r_data["name"],
+                    "chinese_name": r_data.get("chinese_name", ""),
+                    "desc": r_data["desc"],
+                    "stamina_cost": r_data.get("travel_toll_stamina", 40),
+                    "stone_cost": r_data.get("travel_toll_stones", 100),
+                    "is_current": r_id == player_cultivator.current_region_id
+                }
+                for r_id, r_data in MACRO_REGIONS.items()
+            ]
+        }
+    elif current_tile and current_tile.get("is_faction_node"):
         faction_name = current_tile.get("faction", "Gu Yue Clan")
         rep_info = player_cultivator.get_faction_reputation(faction_name)
         is_hostile = rep_info["is_hostile"]
@@ -218,9 +348,6 @@ async def move_player(
     elif current_tile and current_tile.get("is_spirit_spring"):
         if not current_tile.get("harvested"):
             encounter = generate_tile_encounter("Spirit Spring")
-            amt = encounter.get("amount", 75)
-            player_cultivator.spirit_stones += amt
-            current_tile["harvested"] = True
         else:
             encounter = {
                 "type": "resource",
@@ -231,9 +358,6 @@ async def move_player(
             }
     else:
         encounter = generate_tile_encounter(terrain)
-        if encounter and encounter.get("type") == "resource":
-            amt = encounter.get("amount", 15)
-            player_cultivator.spirit_stones += amt
 
     # Dynamic Hunter Matrix: Righteous Enforcer pathfinding & chase
     enforcer_res = enforcer_manager.on_player_action(player_cultivator)

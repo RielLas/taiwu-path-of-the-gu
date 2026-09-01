@@ -1,4 +1,5 @@
 import random
+import hashlib
 from typing import List, Dict, Any, Optional
 
 BIOMES = [
@@ -16,101 +17,210 @@ BIOMES = [
     "Blood Mountain"
 ]
 
+MACRO_REGIONS = {
+    "southern_border_gu_yue": {
+        "id": "southern_border_gu_yue",
+        "name": "Southern Border: Gu Yue Sector",
+        "chinese_name": "南疆古月界域",
+        "macro_region": "southern_border",
+        "desc": "Humid karst mountains thick with bamboo forests, venomous swamps, and ancient Gu Yue clan grounds.",
+        "dominant_biome": "Southern Border Mountain",
+        "color": "#2D5A27",
+        "travel_toll_stamina": 40,
+        "travel_toll_stones": 100,
+        "factions": [
+            {"name": "Gu Yue Clan", "offset": (-5, -5), "type": "Righteous Clan Outpost"},
+            {"name": "Shang Clan Merchant City", "offset": (6, 5), "type": "Neutral Commercial Caravanserai"}
+        ]
+    },
+    "central_continent_spirit_affinity": {
+        "id": "central_continent_spirit_affinity",
+        "name": "Central Continent: Spirit Affinity Sector",
+        "chinese_name": "中洲灵缘界域",
+        "macro_region": "central_continent",
+        "desc": "Vast fertile plains and towering sect pavilions under the influence of supreme righteous sects.",
+        "dominant_biome": "Central Continent Plains",
+        "color": "#8B6914",
+        "travel_toll_stamina": 40,
+        "travel_toll_stones": 100,
+        "factions": [
+            {"name": "Central Continent Sect", "offset": (-6, -4), "type": "Righteous Sect Territory"},
+            {"name": "Shang Clan Merchant City", "offset": (5, 6), "type": "Trade Post"}
+        ]
+    },
+    "western_desert_thousand_li": {
+        "id": "western_desert_thousand_li",
+        "name": "Western Desert: Thousand Li Dunes",
+        "chinese_name": "西漠千里流沙",
+        "macro_region": "western_desert",
+        "desc": "Arid ocean of scorching sand dunes, ancient stone obelisks, and hidden oasis spirit veins.",
+        "dominant_biome": "Western Desert Dunes",
+        "color": "#D97706",
+        "travel_toll_stamina": 40,
+        "travel_toll_stones": 100,
+        "factions": [
+            {"name": "Shadow Sect Remnants", "offset": (-5, -6), "type": "Ancient Demonic Altar"},
+            {"name": "Gu Yue Clan", "offset": (6, 4), "type": "Expedition Camp"}
+        ]
+    },
+    "northern_plains_ge_tribe": {
+        "id": "northern_plains_ge_tribe",
+        "name": "Northern Plains: Ge Tribe Grassland",
+        "chinese_name": "北原葛家草场",
+        "macro_region": "northern_plains",
+        "desc": "Endless windy grasslands and frozen steppes roamed by beast cultivator tribes and wolf packs.",
+        "dominant_biome": "Northern Plains Grassland",
+        "color": "#4A7FA5",
+        "travel_toll_stamina": 40,
+        "travel_toll_stones": 100,
+        "factions": [
+            {"name": "Bai Clan", "offset": (-5, -5), "type": "Plains Clan Outpost"},
+            {"name": "Xiong Clan", "offset": (6, 6), "type": "Plains Hunting Post"}
+        ]
+    },
+    "eastern_sea_blue_wave": {
+        "id": "eastern_sea_blue_wave",
+        "name": "Eastern Sea: Blue Wave Archipelago",
+        "chinese_name": "东海碧波群岛",
+        "macro_region": "eastern_sea",
+        "desc": "Endless azure waters, jagged coral reef archipelagos, and rich maritime trade caravans.",
+        "dominant_biome": "Eastern Sea Reef",
+        "color": "#1A4A6E",
+        "travel_toll_stamina": 40,
+        "travel_toll_stones": 100,
+        "factions": [
+            {"name": "Xiong Clan", "offset": (-6, -5), "type": "Coastal Stronghold"},
+            {"name": "Shang Clan Merchant City", "offset": (5, 5), "type": "Maritime Harbor Post"}
+        ]
+    }
+}
+
+LEGACY_REGION_MAP = {
+    1: "southern_border_gu_yue",
+    2: "central_continent_spirit_affinity",
+    3: "western_desert_thousand_li",
+    4: "northern_plains_ge_tribe",
+    5: "eastern_sea_blue_wave",
+    "1": "southern_border_gu_yue",
+    "2": "central_continent_spirit_affinity",
+    "3": "western_desert_thousand_li",
+    "4": "northern_plains_ge_tribe",
+    "5": "eastern_sea_blue_wave",
+    "southern_border": "southern_border_gu_yue",
+    "central_continent": "central_continent_spirit_affinity",
+    "western_desert": "western_desert_thousand_li",
+    "northern_plains": "northern_plains_ge_tribe",
+    "eastern_sea": "eastern_sea_blue_wave"
+}
+
 REGION_BIOMES = {
     1: "Southern Border Mountain",
     2: "Central Continent Plains",
-    3: "Ancient Ruins",
+    3: "Western Desert Dunes",
     4: "Northern Plains Grassland",
     5: "Eastern Sea Reef"
 }
 
-REGION_FACTIONS = {
-    1: [
-        {"name": "Gu Yue Clan", "offset": (-3, -3), "type": "Righteous Clan Outpost"},
-        {"name": "Shang Clan Merchant City", "offset": (4, 3), "type": "Neutral Commercial Caravanserai"}
-    ],
-    2: [
-        {"name": "Central Continent Sect", "offset": (-3, -3), "type": "Righteous Sect Territory"},
-        {"name": "Shang Clan Merchant City", "offset": (4, 3), "type": "Trade Post"}
-    ],
-    3: [
-        {"name": "Shadow Sect Remnants", "offset": (-3, -3), "type": "Ancient Demonic Altar"},
-        {"name": "Gu Yue Clan", "offset": (4, 3), "type": "Expedition Camp"}
-    ],
-    4: [
-        {"name": "Bai Clan", "offset": (-3, -3), "type": "Plains Clan Outpost"},
-        {"name": "Xiong Clan", "offset": (4, 3), "type": "Plains Hunting Post"}
-    ],
-    5: [
-        {"name": "Xiong Clan", "offset": (-3, -3), "type": "Coastal Stronghold"},
-        {"name": "Shang Clan Merchant City", "offset": (4, 3), "type": "Maritime Harbor Post"}
-    ]
-}
+def generate_region(region_id: Any = "southern_border_gu_yue", width: int = 30, height: int = 30, player_start: List[int] = [15, 15]) -> List[Dict[str, Any]]:
+    """
+    Procedurally generates a 30x30 grid (900 tiles) for a macro-region with deterministic MD5 seed.
+    Seeds a Way Station tile at [15, 15], static Spirit Springs, and Faction Outposts.
+    """
+    # Normalize region_id
+    if isinstance(region_id, int) and region_id in LEGACY_REGION_MAP:
+        canonical_region_id = LEGACY_REGION_MAP[region_id]
+    elif str(region_id) in LEGACY_REGION_MAP:
+        canonical_region_id = LEGACY_REGION_MAP[str(region_id)]
+    elif str(region_id) in MACRO_REGIONS:
+        canonical_region_id = str(region_id)
+    else:
+        canonical_region_id = "southern_border_gu_yue"
 
-def generate_region(region_id: int, width: int = 15, height: int = 15, player_start: List[int] = [7, 7]) -> List[Dict[str, Any]]:
-    """
-    Procedurally generates a 15x15 grid of tiles for a region with consistent seed,
-    assigning biomes to terrain sectors and injecting static Spirit Springs and Institutional Faction Outposts.
-    """
+    region_meta = MACRO_REGIONS.get(canonical_region_id, MACRO_REGIONS["southern_border_gu_yue"])
+    dominant_biome = region_meta.get("dominant_biome", "Southern Border Mountain")
+
+    # Deterministic integer seed via MD5 hash
+    seed = int(hashlib.md5(str(canonical_region_id).encode()).hexdigest(), 16) % (10**8)
+    rng = random.Random(seed)
+
     tiles = []
-    random.seed(region_id)
-    
-    dominant_biome = REGION_BIOMES.get(region_id, random.choice(BIOMES))
     px, py = player_start
-    
-    # Pre-determine static Spirit Spring locations (e.g. 2 static springs per region)
+
+    # Pre-determine static Spirit Spring locations across quadrants in the 30x30 grid
     spring_coords = set([
-        ((px + 3) % width, (py - 3) % height),
-        ((px - 4) % width, (py + 4) % height)
+        ((px + 7) % width, (py - 7) % height),
+        ((px - 8) % width, (py + 8) % height),
+        ((px + 6) % width, (py + 9) % height),
+        ((px - 9) % width, (py - 6) % height)
     ])
 
-    # Pre-determine Faction Outpost / Sect Territory locations
-    faction_configs = REGION_FACTIONS.get(region_id, REGION_FACTIONS[1])
+    # Pre-determine Faction Outpost locations from region configuration
+    faction_configs = region_meta.get("factions", [])
     faction_coords_map = {}
     for fc in faction_configs:
         ox, oy = fc["offset"]
         fx = (px + ox) % width
         fy = (py + oy) % height
         faction_coords_map[(fx, fy)] = fc
-    
+
     for y in range(height):
         for x in range(width):
             is_spring = False
             is_faction = False
+            is_way_station = False
             tile_faction = None
             tile_faction_type = None
+            tile_name = None
+            tile_desc = None
 
-            if (x, y) == (px, py):
-                terrain = "Sect Grounds"
+            # [15, 15] is the Way Station Caravan Hub
+            if (x, y) == (15, 15):
+                terrain = "Way Station"
+                terrain_type = "way_station"
                 tile_biome = dominant_biome
+                is_way_station = True
+                tile_name = "Way Station Caravan Hub"
+                tile_desc = "Inter-regional caravan trading hub and waypoint station connecting the Five Regions."
             elif (x, y) in spring_coords:
                 terrain = "Spirit Spring"
+                terrain_type = "spirit_spring"
                 tile_biome = dominant_biome
                 is_spring = True
+                tile_name = "Natural Jade Spirit Spring"
+                tile_desc = "A crystalline jade aperture fissure gushing with concentrated primeval essence."
             elif (x, y) in faction_coords_map:
+                fc = faction_coords_map[(x, y)]
                 terrain = "Faction Outpost"
+                terrain_type = "faction_outpost"
                 tile_biome = dominant_biome
                 is_faction = True
-                tile_faction = faction_coords_map[(x, y)]["name"]
-                tile_faction_type = faction_coords_map[(x, y)]["type"]
-            elif random.random() < 0.60:
+                tile_faction = fc["name"]
+                tile_faction_type = fc["type"]
+                tile_name = f"{fc['name']} Outpost"
+                tile_desc = f"Fortified outpost under the authority of {fc['name']}."
+            elif rng.random() < 0.65:
                 terrain = dominant_biome
+                terrain_type = dominant_biome
                 tile_biome = dominant_biome
             else:
-                terrain = random.choice(BIOMES)
-                tile_biome = terrain if terrain in REGION_BIOMES.values() else dominant_biome
-                
-            # Initial fog of war: reveal tiles within distance 1 of player start
+                terrain = rng.choice(BIOMES)
+                terrain_type = terrain
+                tile_biome = terrain if terrain in [r["dominant_biome"] for r in MACRO_REGIONS.values()] else dominant_biome
+
+            # Fog of war: reveal tiles within distance 1 of player position
             is_revealed = abs(x - px) <= 1 and abs(y - py) <= 1
-            
+
             tile = {
                 "x": x,
                 "y": y,
-                "type": terrain,
+                "type": terrain_type,
                 "terrain": terrain,
                 "biome": tile_biome,
+                "name": tile_name,
+                "desc": tile_desc,
                 "is_spirit_spring": is_spring,
                 "is_faction_node": is_faction,
+                "is_way_station": is_way_station,
                 "faction": tile_faction,
                 "faction_type": tile_faction_type,
                 "harvested": False,
@@ -118,7 +228,7 @@ def generate_region(region_id: int, width: int = 15, height: int = 15, player_st
                 "discovered": is_revealed
             }
             tiles.append(tile)
-            
+
     return tiles
 
 def generate_tile_encounter(terrain: str) -> Optional[Dict[str, Any]]:

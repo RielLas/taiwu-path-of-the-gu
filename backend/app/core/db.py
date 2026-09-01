@@ -52,9 +52,14 @@ def init_db():
         active_bounties TEXT NOT NULL,
         aperture TEXT NOT NULL,
         vault TEXT NOT NULL,
+        current_region_id TEXT DEFAULT 'southern_border_gu_yue',
         updated_at REAL NOT NULL
     )
     """)
+    cursor.execute("PRAGMA table_info(cultivator_state)")
+    columns = [col[1] for col in cursor.fetchall()]
+    if "current_region_id" not in columns:
+        cursor.execute("ALTER TABLE cultivator_state ADD COLUMN current_region_id TEXT DEFAULT 'southern_border_gu_yue'")
     conn.commit()
     conn.close()
 

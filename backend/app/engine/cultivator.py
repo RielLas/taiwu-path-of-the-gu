@@ -27,7 +27,8 @@ class CultivatorState:
         self.last_stamina_update: float = time.time()
         self.essence_type: str = "Rank 1 Initial Green Copper Primeval Essence"
         self.spirit_stones: int = 65
-        self.player_pos: List[int] = [7, 7]  # [x, y]
+        self.current_region_id: str = "southern_border_gu_yue"
+        self.player_pos: List[int] = [15, 15]  # [x, y]
         self.current_node: dict = None  # tracks the current explorable node
         
         # Base mortal attributes
@@ -193,15 +194,16 @@ class CultivatorState:
             conn = get_db_connection()
             cursor = conn.cursor()
             now = time.time()
+            self.last_stamina_update = now
             cursor.execute("""
             INSERT INTO cultivator_state (
                 id, name, rank, stage, aperture_grade, aptitude_percentage, aperture_status,
                 primeval_essence, max_essence, nourish_progress, stamina, max_stamina,
                 last_stamina_update, essence_type, spirit_stones, player_pos_x, player_pos_y,
                 base_strength, base_defense, base_speed, current_hp, alignment_score,
-                faction_reputations, active_bounties, aperture, vault, updated_at
+                faction_reputations, active_bounties, aperture, vault, current_region_id, updated_at
             ) VALUES (
-                1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             )
             ON CONFLICT(id) DO UPDATE SET
                 name=excluded.name,
@@ -229,6 +231,7 @@ class CultivatorState:
                 active_bounties=excluded.active_bounties,
                 aperture=excluded.aperture,
                 vault=excluded.vault,
+                current_region_id=excluded.current_region_id,
                 updated_at=excluded.updated_at
             """, (
                 self.name, self.rank, self.stage, self.aperture_grade, self.aptitude_percentage, self.aperture_status,
@@ -236,7 +239,7 @@ class CultivatorState:
                 self.last_stamina_update, self.essence_type, self.spirit_stones, self.player_pos[0], self.player_pos[1],
                 self.base_strength, self.base_defense, self.base_speed, self.current_hp, self.alignment_score,
                 json.dumps(self.faction_reputations), json.dumps(self.active_bounties),
-                json.dumps(self.aperture), json.dumps(self.vault), now
+                json.dumps(self.aperture), json.dumps(self.vault), self.current_region_id, now
             ))
             conn.commit()
             conn.close()
@@ -283,6 +286,10 @@ class CultivatorState:
             self.active_bounties = json.loads(row["active_bounties"])
             self.aperture = json.loads(row["aperture"])
             self.vault = json.loads(row["vault"])
+            if "current_region_id" in row.keys() and row["current_region_id"] is not None:
+                self.current_region_id = str(row["current_region_id"])
+            else:
+                self.current_region_id = "southern_border_gu_yue"
             
             # Immediately calculate retroactive stamina for time offline
             self.update_stamina_passive()
@@ -463,6 +470,8 @@ class CultivatorState:
             "essence_color": self.get_essence_color(),
             "essence_type": self.get_essence_type(),
             "spirit_stones": self.spirit_stones,
+            "current_region_id": self.current_region_id,
+            "region_id": self.current_region_id,
             "location": self.player_pos,
             "hp": self.current_hp,
             "max_hp": max_hp,
@@ -770,12 +779,12 @@ class CultivatorState:
     def apply_death_penalty(self) -> Dict[str, Any]:
         """
         Ruthless Gu World Death Penalty:
-        - Teleport back to origin node [7, 7]
+        - Teleport back to origin node [15, 15]
         - Deduct 50% Primeval Stones
         - Permanently destroy one equipped Gu worm from aperture
         """
         import random
-        self.player_pos = [7, 7]
+        self.player_pos = [15, 15]
         lost_stones = self.spirit_stones // 2
         self.spirit_stones -= lost_stones
         
@@ -793,7 +802,7 @@ class CultivatorState:
             "success": True,
             "lost_stones": lost_stones,
             "lost_gu": lost_gu_name,
-            "message": f"💀 MORTAL COLLAPSE! You fell in battle. Teleported to origin [7,7]. Plundered {lost_stones} Primeval Stones." + (f" Your Gu '{lost_gu_name}' was destroyed!" if lost_gu_name else ""),
+            "message": f"💀 MORTAL COLLAPSE! You fell in battle. Teleported to origin [15, 15]. Plundered {lost_stones} Primeval Stones." + (f" Your Gu '{lost_gu_name}' was destroyed!" if lost_gu_name else ""),
             "cultivator": self.get_stats()
         }
 
@@ -1323,6 +1332,18 @@ class CultivatorState:
             "message": f"🧘 Deep Meditation Completed: Circulated primeval essence through your aperture and meridians. Spent {stamina_cost:.0f} Stamina. Restored +{actual_essence_restored:.1f}% Primeval Essence and +{actual_hp_restored} HP.",
             "cultivator": self.get_stats()
         }
+
+    def to_dict(self) -> Dict[str, Any]:
+        """
+        Returns full dictionary representation of the cultivator state.
+        """
+        return self.get_stats()
+
+    def export_stats(self) -> Dict[str, Any]:
+        """
+        Exports full active statistics and state for API and persistence layers.
+        """
+        return self.get_stats()
 
 # Global singleton persistent cultivator instance
 player_cultivator = CultivatorState()
