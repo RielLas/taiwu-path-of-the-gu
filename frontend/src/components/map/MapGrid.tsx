@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from 'react';
-import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import { useWorldStore } from '../../hooks/useWorldStore';
 import { useCultivatorStore } from '../../hooks/useCultivator';
 import type { Encounter } from '../../hooks/useWorldStore';
@@ -7,10 +6,19 @@ import { useCombatStore } from '../../hooks/useCombat';
 import { playJadeClinkSound, playBrushSound } from '../../hooks/useAudio';
 import WayStationModal from './WayStationModal';
 
+// Static Vite Asset Imports for 100% Load Reliability
+import bambooImg from '../../assets/bamboo.webp';
+import springImg from '../../assets/spring.webp';
+import waystationImg from '../../assets/waystation.webp';
+import pointerImg from '../../assets/pointer.webp';
+
 interface MapGridProps {
   initialNodeData?: any;
   onExitNode?: () => void;
 }
+
+const TILE_WIDTH = 192;
+const TILE_HEIGHT = 96;
 
 export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
   const { 
@@ -27,10 +35,11 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
   
   const { cultivator, captureWildGu, fetchAperture } = useCultivatorStore();
 
-  const [logs, setLogs] = useState<string[]>(['> Primeval Aperture steady. Ready to explore 15x15 dynamic sector.']);
+  const [logs, setLogs] = useState<string[]>(['> Primeval Aperture steady. Centered on 15x15 dynamic sector.']);
   const [activeEncounter, setActiveEncounter] = useState<Encounter | null>(null);
   const [encounterResult, setEncounterResult] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [zoomLevel, setZoomLevel] = useState<number>(1.0);
   const logsEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -46,7 +55,7 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
   }, [logs]);
 
   // Phase 2: Dynamic 15x15 Viewport Window (Lag Annihilation)
-  // Slices the 30x30 matrix into a strict 15x15 sub-grid dynamically centered on the player (X, Y)
+  // Slices the 30x30 matrix into a strict 15x15 sub-grid dynamically centered on player (X, Y)
   const WINDOW_SIZE = 15;
   const HALF_WINDOW = Math.floor(WINDOW_SIZE / 2); // 7
 
@@ -59,6 +68,10 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
   const visibleTiles = grid.filter(
     (tile) => tile.x >= startX && tile.x < endX && tile.y >= startY && tile.y < endY
   );
+
+  // Isometric Center Calculations for Player Position
+  const playerIsoX = (playerLocation.x - playerLocation.y) * (TILE_WIDTH / 2);
+  const playerIsoY = (playerLocation.x + playerLocation.y) * (TILE_HEIGHT / 2);
 
   const isWayStationTile = (tile: any) => {
     if (!tile) return false;
@@ -86,9 +99,9 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
   };
 
   const getTileAsset = (tile: any) => {
-    if (isWayStationTile(tile)) return '/assets/waystation.webp';
-    if (isSpiritSpringTile(tile)) return '/assets/spring.webp';
-    return '/assets/bamboo.webp';
+    if (isWayStationTile(tile)) return waystationImg || '/assets/waystation.webp';
+    if (isSpiritSpringTile(tile)) return springImg || '/assets/spring.webp';
+    return bambooImg || '/assets/bamboo.webp';
   };
 
   const handleCombat = async (customEnemy?: any) => {
@@ -241,14 +254,14 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
   const isPlayerOnWayStation = playerLocation.x === 15 && playerLocation.y === 15;
 
   return (
-    <div className="relative w-full h-full min-h-screen bg-[#0d0b09] overflow-hidden select-none font-serif flex flex-col md:flex-row">
+    <div className="relative w-full h-full min-h-screen bg-[#0a0907] overflow-hidden select-none font-serif flex flex-col md:flex-row">
 
-      {/* LEFT / CENTER VIEWPORT: 2.5D Isometric Dynamic 15x15 Canvas */}
-      <div className="flex-1 relative h-full w-full overflow-hidden bg-[#0a0907]">
+      {/* LEFT / CENTER VIEWPORT: Isometric Centered Canvas */}
+      <div className="flex-1 relative h-full w-full overflow-hidden bg-[#0a0907] flex items-center justify-center">
 
-        {/* Dynamic Hunter Matrix: Predator Pursuit Banner (z-40) */}
+        {/* Phase 1: Dynamic Hunter Matrix Banner positioned safely at top-24 right-8 (z-40) */}
         {enforcer && enforcer.active && enforcer.status !== 'defeated' && (
-          <div className="absolute top-20 right-8 z-40 flex items-center gap-3 bg-gradient-to-r from-red-950/95 via-[#1a0808]/95 to-red-950/95 border-2 border-red-600/80 px-4 py-2.5 rounded-2xl shadow-[0_8px_32px_rgba(220,38,38,0.7)] animate-pulse">
+          <div className="absolute top-24 right-8 z-40 flex items-center gap-3 bg-gradient-to-r from-red-950/95 via-[#1a0808]/95 to-red-950/95 border-2 border-red-600/80 px-4 py-2.5 rounded-2xl shadow-[0_8px_32px_rgba(220,38,38,0.7)] animate-pulse">
             <span className="text-xl animate-bounce">⚖️</span>
             <div>
               <div className="flex items-center gap-2">
@@ -266,195 +279,187 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
           </div>
         )}
 
-        <TransformWrapper
-          initialScale={0.45}
-          minScale={0.25}
-          maxScale={1.6}
-          centerOnInit={true}
-          limitToBounds={false}
-          wheel={{ step: 0.05 }}
-        >
-          {({ zoomIn, zoomOut, resetTransform }) => (
+        {/* Sector Navigation & Camera Controls (z-30) */}
+        <div className="absolute top-4 left-4 z-30 flex items-center gap-2 bg-[#12100d] border border-[#2a2620] px-3.5 py-2 rounded-xl shadow-lg">
+          <span className="text-[10px] uppercase font-sans tracking-[0.2em] text-[#c89b3c] font-bold">
+            {currentRegionName} • [{playerLocation.x}, {playerLocation.y}]
+          </span>
+          <div className="w-px h-4 bg-[#2a2620] mx-1"></div>
+          <button
+            onClick={() => setZoomLevel((z) => Math.min(1.8, +(z + 0.15).toFixed(2)))}
+            className="w-6 h-6 flex items-center justify-center text-xs text-[#8a8275] hover:text-[#d5cfc4] rounded hover:bg-[#1a1814] font-bold transition-colors cursor-pointer"
+            title="Zoom In"
+          >
+            ＋
+          </button>
+          <button
+            onClick={() => setZoomLevel((z) => Math.max(0.5, +(z - 0.15).toFixed(2)))}
+            className="w-6 h-6 flex items-center justify-center text-xs text-[#8a8275] hover:text-[#d5cfc4] rounded hover:bg-[#1a1814] font-bold transition-colors cursor-pointer"
+            title="Zoom Out"
+          >
+            －
+          </button>
+          <button
+            onClick={() => setZoomLevel(1.0)}
+            className="text-[10px] text-[#8a8275] hover:text-[#c89b3c] px-2 py-0.5 rounded hover:bg-[#1a1814] uppercase tracking-wider font-bold transition-colors cursor-pointer"
+            title="Reset Zoom"
+          >
+            Reset
+          </button>
+          <div className="w-px h-4 bg-[#2a2620] mx-1"></div>
+          
+          {/* Way Station Transit Button */}
+          <button
+            onClick={() => { playBrushSound(); setWayStationModalOpen(true); }}
+            className={`text-[10px] px-2.5 py-0.5 rounded uppercase tracking-wider font-bold border transition-all flex items-center gap-1.5 cursor-pointer ${
+              isPlayerOnWayStation 
+                ? 'bg-amber-950 text-amber-300 border-amber-500 animate-pulse'
+                : 'bg-[#1a1814] text-[#8a8275] hover:text-[#c89b3c] border-[#2a2620]'
+            }`}
+            title="Open Way Station Caravan Transit Router"
+          >
+            <span>🏮</span>
+            <span>Way Station</span>
+          </button>
+
+          {onExitNode && (
             <>
-              {/* Sector Navigation & Camera Controls (z-30) */}
-              <div className="absolute top-4 left-4 z-30 flex items-center gap-2 bg-[#12100d] border border-[#2a2620] px-3.5 py-2 rounded-xl">
-                <span className="text-[10px] uppercase font-sans tracking-[0.2em] text-[#c89b3c] font-bold">
-                  {currentRegionName} • [{playerLocation.x}, {playerLocation.y}]
-                </span>
-                <div className="w-px h-4 bg-[#2a2620] mx-1"></div>
-                <button
-                  onClick={() => zoomIn()}
-                  className="w-6 h-6 flex items-center justify-center text-xs text-[#8a8275] hover:text-[#d5cfc4] rounded hover:bg-[#1a1814] font-bold transition-colors cursor-pointer"
-                  title="Zoom In"
-                >
-                  ＋
-                </button>
-                <button
-                  onClick={() => zoomOut()}
-                  className="w-6 h-6 flex items-center justify-center text-xs text-[#8a8275] hover:text-[#d5cfc4] rounded hover:bg-[#1a1814] font-bold transition-colors cursor-pointer"
-                  title="Zoom Out"
-                >
-                  －
-                </button>
-                <button
-                  onClick={() => resetTransform()}
-                  className="text-[10px] text-[#8a8275] hover:text-[#c89b3c] px-2 py-0.5 rounded hover:bg-[#1a1814] uppercase tracking-wider font-bold transition-colors cursor-pointer"
-                  title="Reset Camera"
-                >
-                  Reset
-                </button>
-                <div className="w-px h-4 bg-[#2a2620] mx-1"></div>
-                
-                {/* Way Station Transit Button */}
-                <button
-                  onClick={() => { playBrushSound(); setWayStationModalOpen(true); }}
-                  className={`text-[10px] px-2.5 py-0.5 rounded uppercase tracking-wider font-bold border transition-all flex items-center gap-1.5 cursor-pointer ${
-                    isPlayerOnWayStation 
-                      ? 'bg-amber-950 text-amber-300 border-amber-500 animate-pulse'
-                      : 'bg-[#1a1814] text-[#8a8275] hover:text-[#c89b3c] border-[#2a2620]'
-                  }`}
-                  title="Open Way Station Caravan Transit Router"
-                >
-                  <span>🏮</span>
-                  <span>Way Station</span>
-                </button>
-
-                {onExitNode && (
-                  <>
-                    <div className="w-px h-4 bg-[#2a2620] mx-1"></div>
-                    <button
-                      onClick={() => { playBrushSound(); onExitNode(); }}
-                      className="text-[10px] text-[#8a8275] hover:text-[#c89b3c] px-2 py-0.5 rounded hover:bg-[#1a1814] uppercase tracking-wider font-bold border border-[#2a2620] transition-colors cursor-pointer"
-                    >
-                      Exit Node
-                    </button>
-                  </>
-                )}
-              </div>
-
-              {/* Pan/Zoom Canvas Area (z-0) */}
-              <TransformComponent
-                wrapperClass="!w-full !h-full cursor-grab active:cursor-grabbing z-0"
-                contentClass="!w-full !h-full flex items-center justify-center min-w-[3400px] min-h-[3000px]"
+              <div className="w-px h-4 bg-[#2a2620] mx-1"></div>
+              <button
+                onClick={() => { playBrushSound(); onExitNode(); }}
+                className="text-[10px] text-[#8a8275] hover:text-[#c89b3c] px-2 py-0.5 rounded hover:bg-[#1a1814] uppercase tracking-wider font-bold border border-[#2a2620] transition-colors cursor-pointer"
               >
-                {/* 2.5D Isometric Tilt Wrapper */}
-                <div
-                  className="relative p-16 transition-transform duration-200 ease-out z-0"
-                  style={{
-                    transform: 'rotateX(60deg) rotateZ(-45deg)',
-                    transformStyle: 'preserve-3d',
-                  }}
-                >
-                  {/* Outer Boundary Void Border */}
-                  <div className="absolute -inset-6 border-4 border-[#2a2218] rounded-3xl pointer-events-none z-0"></div>
-
-                  {/* The Dynamic 15x15 Tile Grid Plane (225 tiles, 192px each) */}
-                  <div
-                    className="grid gap-2 p-6 bg-[#0a0907] rounded-2xl border-2 border-[#2a2620] z-0"
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(15, minmax(192px, 1fr))',
-                      gridTemplateRows: 'repeat(15, minmax(192px, 1fr))',
-                      transformStyle: 'preserve-3d'
-                    }}
-                  >
-                    {visibleTiles.map((tile) => {
-                      const isPlayerHere = tile.x === playerLocation.x && tile.y === playerLocation.y;
-                      const isEnforcerHere = Boolean(
-                        enforcer && enforcer.active && enforcer.status !== 'defeated' && 
-                        tile.x === enforcer.pos[0] && tile.y === enforcer.pos[1]
-                      );
-                      const isAdjacent = Math.abs(tile.x - playerLocation.x) <= 1 && 
-                                         Math.abs(tile.y - playerLocation.y) <= 1 && 
-                                         !isPlayerHere;
-                      
-                      const isWayStation = isWayStationTile(tile);
-                      const isFaction = Boolean(tile.type === 'Faction Outpost' || tile.terrain === 'Faction Outpost' || tile.is_faction_node);
-                      const tileAssetSrc = getTileAsset(tile);
-
-                      const handleTileClick = () => {
-                        if (isAdjacent) {
-                          handleTravel(tile.x, tile.y);
-                        } else if (isWayStation && (isPlayerHere || isAdjacent)) {
-                          playBrushSound();
-                          setWayStationModalOpen(true);
-                        }
-                      };
-
-                      return (
-                        <div
-                          key={`${tile.x}_${tile.y}`}
-                          onClick={handleTileClick}
-                          className={`
-                            relative w-48 h-48 rounded-2xl overflow-hidden select-none transition-transform duration-200 z-0
-                            ${isAdjacent ? 'cursor-pointer hover:scale-102 border-2 border-amber-400/80' : 'border border-[#2a2620] cursor-default'}
-                            ${isPlayerHere ? 'border-2 border-[#c89b3c]' : ''}
-                          `}
-                          style={{ transformStyle: 'preserve-3d' }}
-                          title={`${isEnforcerHere ? `⚔️ ${enforcer?.name}` : isWayStation ? '🏮 Way Station' : isFaction ? `Faction Outpost: ${tile.faction}` : tile.type} (${tile.x}, ${tile.y})`}
-                        >
-                          {/* Base Terrain Asset Image (z-0) */}
-                          <img
-                            src={tileAssetSrc}
-                            alt={tile.type || 'Tile Terrain'}
-                            className={`w-full h-full object-cover select-none pointer-events-none z-0 ${
-                              !tile.discovered ? 'brightness-40 opacity-40' : 'brightness-100 opacity-100'
-                            }`}
-                            loading="lazy"
-                          />
-
-                          {/* Faction Node Overlay Badge (z-10) */}
-                          {isFaction && tile.discovered && (
-                            <div className="absolute top-2 left-2 z-10 bg-black/85 border border-[#c89b3c] px-2.5 py-1 rounded-lg">
-                              <span className="text-xs font-bold text-amber-200 uppercase font-serif tracking-wider">
-                                {tile.faction || 'Sect Outpost'}
-                              </span>
-                            </div>
-                          )}
-
-                          {/* Way Station Overlay Badge (z-10) */}
-                          {isWayStation && tile.discovered && (
-                            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10 bg-black/90 border border-amber-400 px-3 py-1 rounded-full whitespace-nowrap">
-                              <span className="text-xs font-bold text-amber-300 uppercase font-serif tracking-widest">
-                                Way Station
-                              </span>
-                            </div>
-                          )}
-
-                          {/* Player Avatar Asset Floating (z-20) */}
-                          {isPlayerHere && (
-                            <div className="absolute inset-0 flex flex-col items-center justify-center z-20 pointer-events-none animate-bounce">
-                              <img
-                                src="/assets/pointer.webp"
-                                alt="Player Avatar"
-                                className="w-20 h-20 object-contain pointer-events-none select-none"
-                              />
-                              <span className="text-[10px] bg-black/90 text-amber-300 border border-amber-400 px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider font-mono">
-                                {cultivator?.name || 'Cultivator'}
-                              </span>
-                            </div>
-                          )}
-
-                          {/* Predator Enforcer Entity (z-20) */}
-                          {isEnforcerHere && (
-                            <div className="absolute inset-0 flex flex-col items-center justify-center z-20 pointer-events-none">
-                              <div className="w-16 h-16 rounded-full bg-red-950/90 border-2 border-red-500 flex items-center justify-center text-red-200 font-bold text-xs uppercase font-sans tracking-widest animate-pulse">
-                                Enforcer
-                              </div>
-                              <span className="text-[9px] bg-red-950 text-red-200 border border-red-500 px-2 py-0.5 rounded font-bold font-mono mt-1">
-                                {enforcer?.name}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </TransformComponent>
+                Exit Node
+              </button>
             </>
           )}
-        </TransformWrapper>
+        </div>
+
+        {/* Phase 2: Dynamic Centered Isometric World Container (z-0) */}
+        <div
+          className="absolute inset-0 flex items-center justify-center overflow-hidden pointer-events-auto cursor-grab active:cursor-grabbing z-0"
+        >
+          {/* Main Grid Centering Wrapper: Uses explicit translate to ensure player is always centered */}
+          <div
+            className="relative transition-transform duration-300 ease-out z-0"
+            style={{
+              transform: `scale(${zoomLevel}) translate(calc(-${playerIsoX}px - ${TILE_WIDTH / 2}px), calc(-${playerIsoY}px - ${TILE_HEIGHT / 2}px))`,
+              transformOrigin: 'center center',
+              width: '0px',
+              height: '0px',
+            }}
+          >
+            {visibleTiles.map((tile) => {
+              const isPlayerHere = tile.x === playerLocation.x && tile.y === playerLocation.y;
+              const isEnforcerHere = Boolean(
+                enforcer && enforcer.active && enforcer.status !== 'defeated' && 
+                tile.x === enforcer.pos[0] && tile.y === enforcer.pos[1]
+              );
+              const isAdjacent = Math.abs(tile.x - playerLocation.x) <= 1 && 
+                                 Math.abs(tile.y - playerLocation.y) <= 1 && 
+                                 !isPlayerHere;
+              
+              const isWayStation = isWayStationTile(tile);
+              const isFaction = Boolean(tile.type === 'Faction Outpost' || tile.terrain === 'Faction Outpost' || tile.is_faction_node);
+              const tileAssetSrc = getTileAsset(tile);
+
+              // Phase 2: Explicit Isometric Math with 192px width and 96px height
+              const tileLeft = (tile.x - tile.y) * (TILE_WIDTH / 2);
+              const tileTop = (tile.x + tile.y) * (TILE_HEIGHT / 2);
+
+              const handleTileClick = () => {
+                if (isAdjacent) {
+                  handleTravel(tile.x, tile.y);
+                } else if (isWayStation && (isPlayerHere || isAdjacent)) {
+                  playBrushSound();
+                  setWayStationModalOpen(true);
+                }
+              };
+
+              return (
+                <div
+                  key={`${tile.x}_${tile.y}`}
+                  onClick={handleTileClick}
+                  style={{
+                    position: 'absolute',
+                    left: `${tileLeft}px`,
+                    top: `${tileTop}px`,
+                    width: `${TILE_WIDTH}px`,
+                    height: `${TILE_HEIGHT}px`,
+                  }}
+                  className={`
+                    bg-[#1a1c1a] border border-[#2a2c2a] rounded-2xl overflow-hidden select-none transition-all duration-200 z-0
+                    ${isAdjacent ? 'cursor-pointer hover:border-amber-400 border-2 hover:scale-105 hover:z-30' : 'cursor-default'}
+                    ${isPlayerHere ? 'border-2 border-[#c89b3c] z-20 shadow-[0_0_15px_rgba(200,155,60,0.6)]' : ''}
+                  `}
+                  title={`${isEnforcerHere ? `⚔️ ${enforcer?.name}` : isWayStation ? '🏮 Way Station' : isFaction ? `Faction Outpost: ${tile.faction}` : tile.type} (${tile.x}, ${tile.y})`}
+                >
+                  {/* Base Terrain Asset Image with Fallback (z-0) */}
+                  <img
+                    src={tileAssetSrc}
+                    alt={`${tile.type || 'Tile Terrain'} [${tile.x}, ${tile.y}]`}
+                    onError={(e) => {
+                      (e.currentTarget as HTMLElement).style.display = 'none';
+                    }}
+                    className={`w-full h-full object-cover select-none pointer-events-none z-0 ${
+                      !tile.discovered ? 'brightness-40 opacity-40' : 'brightness-100 opacity-100'
+                    }`}
+                    loading="lazy"
+                  />
+
+                  {/* Fallback Coordinate Indicator */}
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0 opacity-40">
+                    <span className="text-[10px] text-zinc-400 font-mono font-bold">[{tile.x},{tile.y}]</span>
+                  </div>
+
+                  {/* Faction Node Overlay Badge (z-10) */}
+                  {isFaction && tile.discovered && (
+                    <div className="absolute top-1.5 left-2 z-10 bg-black/85 border border-[#c89b3c] px-2 py-0.5 rounded text-[10px] font-bold text-amber-200 uppercase font-serif">
+                      {tile.faction || 'Sect Outpost'}
+                    </div>
+                  )}
+
+                  {/* Way Station Overlay Badge (z-10) */}
+                  {isWayStation && tile.discovered && (
+                    <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 z-10 bg-black/90 border border-amber-400 px-2.5 py-0.5 rounded-full text-[10px] font-bold text-amber-300 uppercase font-serif tracking-wider whitespace-nowrap">
+                      🏮 Way Station
+                    </div>
+                  )}
+
+                  {/* Player Avatar Asset Floating (z-20) */}
+                  {isPlayerHere && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center z-20 pointer-events-none animate-bounce">
+                      <img
+                        src={pointerImg || '/assets/pointer.webp'}
+                        alt="Player Avatar"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLElement).style.display = 'none';
+                        }}
+                        className="w-12 h-12 object-contain pointer-events-none select-none drop-shadow"
+                      />
+                      <span className="text-[9px] bg-black/90 text-amber-300 border border-amber-400 px-2 py-0.2 rounded-full font-bold uppercase tracking-wider font-mono">
+                        {cultivator?.name || 'Cultivator'}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Predator Enforcer Entity (z-20) */}
+                  {isEnforcerHere && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center z-20 pointer-events-none">
+                      <div className="w-10 h-10 rounded-full bg-red-950/90 border-2 border-red-500 flex items-center justify-center text-red-200 font-bold text-[10px] uppercase font-sans tracking-widest animate-pulse">
+                        ⚔️
+                      </div>
+                      <span className="text-[8px] bg-red-950 text-red-200 border border-red-500 px-1.5 py-0.2 rounded font-bold font-mono mt-0.5">
+                        {enforcer?.name}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
       </div>
 
       {/* RIGHT DRAWER: Exploration Log & Sector Intel (z-30) */}
