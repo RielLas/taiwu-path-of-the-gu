@@ -41,7 +41,7 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [zoomLevel, setZoomLevel] = useState<number>(1.0);
 
-  // Phase 1: Drag-to-Pan Camera State
+  // Drag-to-Pan Virtual Camera State
   const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [lastMousePos, setLastMousePos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
@@ -61,7 +61,7 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
     logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [logs]);
 
-  // Phase 2: Dynamic 15x15 Viewport Window (Lag Annihilation)
+  // Dynamic 15x15 Viewport Window (Lag Annihilation)
   // Slices the 30x30 matrix into a strict 15x15 sub-grid dynamically centered on player (X, Y)
   const WINDOW_SIZE = 15;
   const HALF_WINDOW = Math.floor(WINDOW_SIZE / 2); // 7
@@ -75,17 +75,6 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
   const visibleTiles = grid
     .filter((tile) => tile.x >= startX && tile.x < endX && tile.y >= startY && tile.y < endY)
     .sort((a, b) => (a.x + a.y) - (b.x + b.y));
-
-  // Phase 2: Sealing Tile Gaps & Center Calculation
-  // Base player position in isometric space (using TILE_HEIGHT / 4 for vertical compression)
-  const playerBaseX = (playerLocation.x - playerLocation.y) * (TILE_WIDTH / 2);
-  const playerBaseY = (playerLocation.x + playerLocation.y) * (TILE_HEIGHT / 4);
-
-  // Center offset to lock player position at origin
-  const centerOffset = {
-    x: -playerBaseX,
-    y: -playerBaseY
-  };
 
   const isWayStationTile = (tile: any) => {
     if (!tile) return false;
@@ -265,7 +254,7 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
     setActiveEncounter(null);
   };
 
-  // Phase 1: Mouse Drag Event Handlers for Virtual Camera
+  // Mouse Drag Event Handlers for Virtual Camera
   const handleMouseDown = (e: React.MouseEvent) => {
     if (e.button !== 0) return;
     setIsDragging(true);
@@ -309,7 +298,7 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseLeave}
-        className={`flex-1 relative h-full w-full overflow-hidden bg-[#0a0907] flex items-center justify-center ${
+        className={`flex-1 relative h-full w-full min-h-screen overflow-hidden bg-[#0a0907] ${
           isDragging ? 'cursor-grabbing' : 'cursor-grab'
         }`}
       >
@@ -396,127 +385,131 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
           )}
         </div>
 
-        {/* Phase 2: Dynamic Centered Isometric World Container (z-0) */}
+        {/* Phase 2: Pure CSS Camera Anchor (Immortal Dead-Center at 50% 50%) */}
         <div
-          className="absolute inset-0 flex items-center justify-center overflow-hidden pointer-events-none z-0"
+          className="absolute left-1/2 top-1/2 pointer-events-auto"
+          style={{
+            transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoomLevel})`,
+            transformOrigin: '0 0',
+            width: '0px',
+            height: '0px',
+          }}
         >
-          {/* Main Grid Centering Wrapper with Scale and Origin */}
+          {/* Phase 3: The Relative Matrix Rendering */}
+          {visibleTiles.map((tile) => {
+            const isPlayerHere = tile.x === playerLocation.x && tile.y === playerLocation.y;
+            const isEnforcerHere = Boolean(
+              enforcer && enforcer.active && enforcer.status !== 'defeated' && 
+              tile.x === enforcer.pos[0] && tile.y === enforcer.pos[1]
+            );
+            const isAdjacent = Math.abs(tile.x - playerLocation.x) <= 1 && 
+                               Math.abs(tile.y - playerLocation.y) <= 1 && 
+                               !isPlayerHere;
+            
+            const isWayStation = isWayStationTile(tile);
+            const isFaction = Boolean(tile.type === 'Faction Outpost' || tile.terrain === 'Faction Outpost' || tile.is_faction_node);
+            const tileAssetSrc = getTileAsset(tile);
+
+            // Phase 3: Relative Deltas from Player Position
+            const deltaX = tile.x - playerLocation.x;
+            const deltaY = tile.y - playerLocation.y;
+            const tileLeft = (deltaX - deltaY) * (TILE_WIDTH / 2);
+            const tileTop = (deltaX + deltaY) * (TILE_HEIGHT / 4);
+
+            const handleTileClick = (e: React.MouseEvent) => {
+              e.stopPropagation();
+              if (hasMovedDuringDrag) return;
+              if (isAdjacent) {
+                handleTravel(tile.x, tile.y);
+              } else if (isWayStation && (isPlayerHere || isAdjacent)) {
+                playBrushSound();
+                setWayStationModalOpen(true);
+              }
+            };
+
+            return (
+              <div
+                key={`${tile.x}_${tile.y}`}
+                onClick={handleTileClick}
+                style={{
+                  position: 'absolute',
+                  left: `${tileLeft}px`,
+                  top: `${tileTop}px`,
+                  transform: 'translate(-50%, -50%)',
+                  width: `${TILE_WIDTH}px`,
+                  height: `${TILE_HEIGHT}px`,
+                  zIndex: (deltaX + deltaY) * 2 + 50
+                }}
+                className={`
+                  absolute bg-transparent border-none overflow-visible select-none transition-all duration-150
+                  ${isAdjacent ? 'cursor-pointer hover:scale-105 hover:filter hover:drop-shadow-[0_0_10px_rgba(245,158,11,0.6)]' : 'cursor-default'}
+                  ${isPlayerHere ? 'filter drop-shadow-[0_0_12px_rgba(200,155,60,0.8)]' : ''}
+                `}
+                title={`${isEnforcerHere ? `⚔️ ${enforcer?.name}` : isWayStation ? '🏮 Way Station' : isFaction ? `Faction Outpost: ${tile.faction}` : tile.type} (${tile.x}, ${tile.y})`}
+              >
+                {/* Base Terrain Asset Image */}
+                <img
+                  src={tileAssetSrc}
+                  alt={`${tile.type || 'Tile Terrain'} [${tile.x}, ${tile.y}]`}
+                  onError={(e) => {
+                    (e.currentTarget as HTMLElement).style.display = 'none';
+                  }}
+                  className={`w-full h-full object-cover select-none pointer-events-none ${
+                    !tile.discovered ? 'brightness-40 opacity-40' : 'brightness-100 opacity-100'
+                  }`}
+                  loading="lazy"
+                />
+
+                {/* Faction Node Overlay Badge (z-10) */}
+                {isFaction && tile.discovered && (
+                  <div className="absolute top-4 left-4 z-10 bg-black/85 border border-[#c89b3c] px-2 py-0.5 rounded text-[10px] font-bold text-amber-200 uppercase font-serif">
+                    {tile.faction || 'Sect Outpost'}
+                  </div>
+                )}
+
+                {/* Way Station Overlay Badge (z-10) */}
+                {isWayStation && tile.discovered && (
+                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 bg-black/90 border border-amber-400 px-2.5 py-0.5 rounded-full text-[10px] font-bold text-amber-300 uppercase font-serif tracking-wider whitespace-nowrap">
+                    🏮 Way Station
+                  </div>
+                )}
+
+                {/* Predator Enforcer Entity (z-20) */}
+                {isEnforcerHere && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center z-20 pointer-events-none">
+                    <div className="w-12 h-12 rounded-full bg-red-950/90 border-2 border-red-500 flex items-center justify-center text-red-200 font-bold text-xs uppercase font-sans tracking-widest animate-pulse">
+                      ⚔️
+                    </div>
+                    <span className="text-[8px] bg-red-950 text-red-200 border border-red-500 px-1.5 py-0.2 rounded font-bold font-mono mt-0.5">
+                      {enforcer?.name}
+                    </span>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+          {/* Phase 3: Player Pointer - Positioned at exact 0, 0 inside Camera Anchor */}
           <div
-            className="relative pointer-events-auto"
+            className="absolute left-0 top-0 flex flex-col items-center justify-center pointer-events-none animate-bounce"
             style={{
-              transform: `scale(${zoomLevel})`,
-              transformOrigin: 'center center',
-              width: '0px',
-              height: '0px',
+              transform: 'translate(-50%, -85%)',
+              zIndex: 200
             }}
           >
-            {visibleTiles.map((tile) => {
-              const isPlayerHere = tile.x === playerLocation.x && tile.y === playerLocation.y;
-              const isEnforcerHere = Boolean(
-                enforcer && enforcer.active && enforcer.status !== 'defeated' && 
-                tile.x === enforcer.pos[0] && tile.y === enforcer.pos[1]
-              );
-              const isAdjacent = Math.abs(tile.x - playerLocation.x) <= 1 && 
-                                 Math.abs(tile.y - playerLocation.y) <= 1 && 
-                                 !isPlayerHere;
-              
-              const isWayStation = isWayStationTile(tile);
-              const isFaction = Boolean(tile.type === 'Faction Outpost' || tile.terrain === 'Faction Outpost' || tile.is_faction_node);
-              const tileAssetSrc = getTileAsset(tile);
-
-              // Phase 2: Tightened Absolute Isometric Math with TILE_HEIGHT / 4 vertical compression
-              const tileLeft = (tile.x - tile.y) * (TILE_WIDTH / 2) + centerOffset.x + pan.x;
-              const tileTop = (tile.x + tile.y) * (TILE_HEIGHT / 4) + centerOffset.y + pan.y;
-
-              const handleTileClick = (e: React.MouseEvent) => {
-                e.stopPropagation();
-                if (hasMovedDuringDrag) return;
-                if (isAdjacent) {
-                  handleTravel(tile.x, tile.y);
-                } else if (isWayStation && (isPlayerHere || isAdjacent)) {
-                  playBrushSound();
-                  setWayStationModalOpen(true);
-                }
-              };
-
-              return (
-                <div
-                  key={`${tile.x}_${tile.y}`}
-                  onClick={handleTileClick}
-                  style={{
-                    position: 'absolute',
-                    left: `${tileLeft - TILE_WIDTH / 2}px`,
-                    top: `${tileTop - TILE_HEIGHT / 2}px`,
-                    width: `${TILE_WIDTH}px`,
-                    height: `${TILE_HEIGHT}px`,
-                    zIndex: (tile.x + tile.y) * 2 + (isPlayerHere ? 100 : 0)
-                  }}
-                  className={`
-                    absolute bg-transparent border-none overflow-visible select-none transition-all duration-150
-                    ${isAdjacent ? 'cursor-pointer hover:scale-105 hover:filter hover:drop-shadow-[0_0_10px_rgba(245,158,11,0.6)]' : 'cursor-default'}
-                    ${isPlayerHere ? 'filter drop-shadow-[0_0_12px_rgba(200,155,60,0.8)]' : ''}
-                  `}
-                  title={`${isEnforcerHere ? `⚔️ ${enforcer?.name}` : isWayStation ? '🏮 Way Station' : isFaction ? `Faction Outpost: ${tile.faction}` : tile.type} (${tile.x}, ${tile.y})`}
-                >
-                  {/* Base Terrain Asset Image (z-0) */}
-                  <img
-                    src={tileAssetSrc}
-                    alt={`${tile.type || 'Tile Terrain'} [${tile.x}, ${tile.y}]`}
-                    onError={(e) => {
-                      (e.currentTarget as HTMLElement).style.display = 'none';
-                    }}
-                    className={`w-full h-full object-cover select-none pointer-events-none ${
-                      !tile.discovered ? 'brightness-40 opacity-40' : 'brightness-100 opacity-100'
-                    }`}
-                    loading="lazy"
-                  />
-
-                  {/* Faction Node Overlay Badge (z-10) */}
-                  {isFaction && tile.discovered && (
-                    <div className="absolute top-2 left-2 z-10 bg-black/85 border border-[#c89b3c] px-2 py-0.5 rounded text-[10px] font-bold text-amber-200 uppercase font-serif">
-                      {tile.faction || 'Sect Outpost'}
-                    </div>
-                  )}
-
-                  {/* Way Station Overlay Badge (z-10) */}
-                  {isWayStation && tile.discovered && (
-                    <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10 bg-black/90 border border-amber-400 px-2.5 py-0.5 rounded-full text-[10px] font-bold text-amber-300 uppercase font-serif tracking-wider whitespace-nowrap">
-                      🏮 Way Station
-                    </div>
-                  )}
-
-                  {/* Player Avatar Asset Floating (z-20) */}
-                  {isPlayerHere && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center z-20 pointer-events-none animate-bounce">
-                      <img
-                        src={pointerImg || '/assets/pointer.webp'}
-                        alt="Player Avatar"
-                        onError={(e) => {
-                          (e.currentTarget as HTMLElement).style.display = 'none';
-                        }}
-                        className="w-14 h-14 object-contain pointer-events-none select-none drop-shadow"
-                      />
-                      <span className="text-[9px] bg-black/90 text-amber-300 border border-amber-400 px-2 py-0.2 rounded-full font-bold uppercase tracking-wider font-mono">
-                        {cultivator?.name || 'Cultivator'}
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Predator Enforcer Entity (z-20) */}
-                  {isEnforcerHere && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center z-20 pointer-events-none">
-                      <div className="w-12 h-12 rounded-full bg-red-950/90 border-2 border-red-500 flex items-center justify-center text-red-200 font-bold text-xs uppercase font-sans tracking-widest animate-pulse">
-                        ⚔️
-                      </div>
-                      <span className="text-[8px] bg-red-950 text-red-200 border border-red-500 px-1.5 py-0.2 rounded font-bold font-mono mt-0.5">
-                        {enforcer?.name}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+            <img
+              src={pointerImg || '/assets/pointer.webp'}
+              alt="Player Avatar"
+              onError={(e) => {
+                (e.currentTarget as HTMLElement).style.display = 'none';
+              }}
+              className="w-14 h-14 object-contain pointer-events-none select-none drop-shadow"
+            />
+            <span className="text-[9px] bg-black/90 text-amber-300 border border-amber-400 px-2 py-0.2 rounded-full font-bold uppercase tracking-wider font-mono shadow-md">
+              {cultivator?.name || 'Cultivator'}
+            </span>
           </div>
+
         </div>
 
       </div>
