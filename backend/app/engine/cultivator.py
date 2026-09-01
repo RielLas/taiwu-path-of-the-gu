@@ -12,7 +12,8 @@ from typing import List, Dict, Any, Optional
 from app.core.db import get_db_connection
 
 class CultivatorState:
-    def __init__(self):
+    def __init__(self, character_id: int = 1):
+        self.character_id: int = character_id
         self.name: str = "Fang Yuan"
         self.rank: int = 1
         self.stage: str = "Initial Stage"
@@ -36,7 +37,6 @@ class CultivatorState:
         self.base_defense: int = 5
         self.base_speed: int = 10
         self.current_hp: int = 100
-
         # Dynamic Karmic & Institutional Standing State
         self.alignment_score: int = -75
         self.faction_reputations: Dict[str, int] = {
@@ -186,6 +186,20 @@ class CultivatorState:
             }
         ]
 
+    @property
+    def primeval_stones(self) -> int:
+        return self.spirit_stones
+
+    @primeval_stones.setter
+    def primeval_stones(self, val: int):
+        self.spirit_stones = int(val)
+
+    def get_aperture_capacity(self) -> int:
+        return 5
+
+    def get_vault_capacity(self) -> int:
+        return 50
+
     def save_to_db(self) -> None:
         """
         Persists the current cultivator state to the SQLite database.
@@ -199,11 +213,11 @@ class CultivatorState:
             INSERT INTO cultivator_state (
                 id, name, rank, stage, aperture_grade, aptitude_percentage, aperture_status,
                 primeval_essence, max_essence, nourish_progress, stamina, max_stamina,
-                last_stamina_update, essence_type, spirit_stones, player_pos_x, player_pos_y,
+                last_stamina_update, essence_type, spirit_stones, primeval_stones, player_pos_x, player_pos_y,
                 base_strength, base_defense, base_speed, current_hp, alignment_score,
                 faction_reputations, active_bounties, aperture, vault, current_region_id, updated_at
             ) VALUES (
-                1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             )
             ON CONFLICT(id) DO UPDATE SET
                 name=excluded.name,
@@ -220,6 +234,7 @@ class CultivatorState:
                 last_stamina_update=excluded.last_stamina_update,
                 essence_type=excluded.essence_type,
                 spirit_stones=excluded.spirit_stones,
+                primeval_stones=excluded.primeval_stones,
                 player_pos_x=excluded.player_pos_x,
                 player_pos_y=excluded.player_pos_y,
                 base_strength=excluded.base_strength,
@@ -234,9 +249,9 @@ class CultivatorState:
                 current_region_id=excluded.current_region_id,
                 updated_at=excluded.updated_at
             """, (
-                self.name, self.rank, self.stage, self.aperture_grade, self.aptitude_percentage, self.aperture_status,
+                self.character_id, self.name, self.rank, self.stage, self.aperture_grade, self.aptitude_percentage, self.aperture_status,
                 self.primeval_essence, self.max_essence, self.nourish_progress, self.stamina, self.max_stamina,
-                self.last_stamina_update, self.essence_type, self.spirit_stones, self.player_pos[0], self.player_pos[1],
+                self.last_stamina_update, self.essence_type, self.spirit_stones, self.spirit_stones, self.player_pos[0], self.player_pos[1],
                 self.base_strength, self.base_defense, self.base_speed, self.current_hp, self.alignment_score,
                 json.dumps(self.faction_reputations), json.dumps(self.active_bounties),
                 json.dumps(self.aperture), json.dumps(self.vault), self.current_region_id, now
@@ -254,7 +269,7 @@ class CultivatorState:
         try:
             conn = get_db_connection()
             cursor = conn.cursor()
-            cursor.execute("SELECT * FROM cultivator_state WHERE id = 1")
+            cursor.execute("SELECT * FROM cultivator_state WHERE id = ?", (self.character_id,))
             row = cursor.fetchone()
             conn.close()
             
@@ -290,6 +305,18 @@ class CultivatorState:
                 self.current_region_id = str(row["current_region_id"])
             else:
                 self.current_region_id = "southern_border_gu_yue"
+            
+            # Ensure all Gu have satiety and hunger initialized
+            for gu in self.aperture:
+                if "satiety" not in gu:
+                    gu["satiety"] = gu.get("hunger", 100)
+                if "hunger" not in gu:
+                    gu["hunger"] = gu["satiety"]
+            for gu in self.vault:
+                if "satiety" not in gu:
+                    gu["satiety"] = gu.get("hunger", 100)
+                if "hunger" not in gu:
+                    gu["hunger"] = gu["satiety"]
             
             # Immediately calculate retroactive stamina for time offline
             self.update_stamina_passive()
@@ -1333,6 +1360,147 @@ class CultivatorState:
             "cultivator": self.get_stats()
         }
 
+    def unequip_gu(self, gu_id: str) -> Dict[str, Any]:
+        """
+        Moves a Gu worm from the active Aperture into the storage Vault.
+        """
+        gu = next((g for g in self.aperture if g.get("id") == gu_id), None)
+        if not gu:
+            return {
+                "success": False,
+                "message": f"Gu with ID '{gu_id}' not found in active Aperture."
+            }
+        
+        if len(self.vault) >= self.get_vault_capacity():
+            return {
+                "success": False,
+                "message": f"Storage Vault is at maximum capacity ({self.get_vault_capacity()} items)."
+            }
+            
+        self.aperture.remove(gu)
+        self.vault.append(gu)
+        self.save_to_db()
+        return {
+            "success": True,
+            "message": f"Unequipped '{gu.get('name')}' and transferred to Vault.",
+            "gu": gu,
+            "aperture": self.aperture,
+            "vault": self.vault,
+            "cultivator": self.get_stats()
+        }
+
+    def equip_gu(self, gu_id: str) -> Dict[str, Any]:
+        """
+        Moves a Gu worm from the storage Vault into the active Aperture.
+        """
+        gu = next((g for g in self.vault if g.get("id") == gu_id), None)
+        if not gu:
+            return {
+                "success": False,
+                "message": f"Gu with ID '{gu_id}' not found in storage Vault."
+            }
+            
+        if len(self.aperture) >= self.get_aperture_capacity():
+            return {
+                "success": False,
+                "message": f"Aperture is at maximum capacity ({self.get_aperture_capacity()} Gu). Unequip a Gu first."
+            }
+            
+        self.vault.remove(gu)
+        self.aperture.append(gu)
+        self.save_to_db()
+        return {
+            "success": True,
+            "message": f"Equipped '{gu.get('name')}' into Primeval Aperture.",
+            "gu": gu,
+            "aperture": self.aperture,
+            "vault": self.vault,
+            "cultivator": self.get_stats()
+        }
+
+    def consume_primeval_stones(self, amount: int = 1) -> Dict[str, Any]:
+        """
+        The Thermodynamics of Primeval Stones:
+        Instantly restores 5% of Max Primeval Essence per stone consumed.
+        Completely bypasses stamina drain of meditation.
+        """
+        if amount <= 0:
+            return {
+                "success": False,
+                "message": "Must consume at least 1 Primeval Stone."
+            }
+            
+        if self.spirit_stones < amount:
+            return {
+                "success": False,
+                "message": f"Insufficient Primeval Stones! Required: {amount}, Available: {self.spirit_stones}."
+            }
+            
+        self.spirit_stones -= amount
+        
+        # Restore 5% of max essence per stone
+        essence_per_stone = self.max_essence * 0.05
+        total_recovery = amount * essence_per_stone
+        old_essence = self.primeval_essence
+        self.primeval_essence = min(self.max_essence, round(self.primeval_essence + total_recovery, 2))
+        actual_restored = round(self.primeval_essence - old_essence, 2)
+        
+        self.save_to_db()
+        return {
+            "success": True,
+            "stones_consumed": amount,
+            "essence_restored": actual_restored,
+            "primeval_essence": self.primeval_essence,
+            "spirit_stones": self.spirit_stones,
+            "primeval_stones": self.spirit_stones,
+            "message": f"💎 Shattered {amount} Primeval Stone(s) into your aperture! Instantly restored +{actual_restored:.1f}% Primeval Essence.",
+            "cultivator": self.get_stats()
+        }
+
+    def feed_gu_worm(self, gu_id: str, stone_amount: int = 1) -> Dict[str, Any]:
+        """
+        Feeds an equipped or vaulted Gu worm with Primeval Stones.
+        Restores +20 satiety per stone (capped at 100).
+        """
+        if stone_amount <= 0:
+            return {
+                "success": False,
+                "message": "Must provide at least 1 Primeval Stone to feed."
+            }
+            
+        all_gu = self.aperture + self.vault
+        gu = next((g for g in all_gu if g.get("id") == gu_id), None)
+        if not gu:
+            return {
+                "success": False,
+                "message": f"Gu with ID '{gu_id}' not found in aperture or vault."
+            }
+            
+        if self.spirit_stones < stone_amount:
+            return {
+                "success": False,
+                "message": f"Insufficient Primeval Stones! Required: {stone_amount}, Available: {self.spirit_stones}."
+            }
+            
+        self.spirit_stones -= stone_amount
+        current_satiety = int(gu.get("satiety", gu.get("hunger", 100)))
+        satiety_gain = 20 * stone_amount
+        new_satiety = min(100, current_satiety + satiety_gain)
+        gu["satiety"] = new_satiety
+        gu["hunger"] = new_satiety
+        
+        self.save_to_db()
+        return {
+            "success": True,
+            "gu_id": gu_id,
+            "gu_name": gu.get("name"),
+            "stones_deducted": stone_amount,
+            "satiety": new_satiety,
+            "message": f"Fed {stone_amount} Primeval Stone(s) to '{gu.get('name')}'. Satiety restored to {new_satiety}%!",
+            "gu": gu,
+            "cultivator": self.get_stats()
+        }
+
     def to_dict(self) -> Dict[str, Any]:
         """
         Returns full dictionary representation of the cultivator state.
@@ -1345,8 +1513,31 @@ class CultivatorState:
         """
         return self.get_stats()
 
-# Global singleton persistent cultivator instance
-player_cultivator = CultivatorState()
-player_cultivator.load_from_db()
+def get_cultivator(character_id: int = 1) -> CultivatorState:
+    """
+    Direct Database Session Fetcher:
+    Loads fresh cultivator state directly from the SQLite database.
+    Applies retroactive stamina and returns an isolated instance.
+    """
+    cultivator = CultivatorState(character_id=character_id)
+    cultivator.load_from_db()
+    return cultivator
+
+class _CultivatorProxy:
+    """
+    Dynamic Proxy ensuring any remaining global accesses always fetch
+    and persist directly to the SQLite database without in-memory singleton drift.
+    """
+    def __getattr__(self, name):
+        c = get_cultivator(1)
+        return getattr(c, name)
+        
+    def __setattr__(self, name, value):
+        c = get_cultivator(1)
+        setattr(c, name, value)
+        c.save_to_db()
+
+# Backwards compatibility proxy
+player_cultivator = _CultivatorProxy()
 
 

@@ -1,11 +1,12 @@
 """
 Combat API Endpoints (Plunder Matrix & Battle Actions)
+Direct database access per request.
 """
 
 from fastapi import APIRouter, HTTPException
 from typing import Dict, Any, Optional
 from app.engine.combat import resolve_combat_plunder, calculate_gu_combat_cost
-from app.engine.cultivator import player_cultivator
+from app.engine.cultivator import get_cultivator
 from app.engine.npc import enforcer_manager
 
 router = APIRouter()
@@ -28,9 +29,10 @@ async def get_combat_costs():
     """
     Returns current essence multiplier and fractional cost matrix for equipped combat Gu.
     """
-    multiplier = player_cultivator.get_essence_multiplier()
+    cultivator = get_cultivator(1)
+    multiplier = cultivator.get_essence_multiplier()
     costs = []
-    for gu in player_cultivator.aperture:
+    for gu in cultivator.aperture:
         if gu.get("gu_type") == "active":
             beu = gu.get("essence_cost", 10)
             actual_pct = calculate_gu_combat_cost(beu)
@@ -45,7 +47,7 @@ async def get_combat_costs():
     return {
         "status": "success",
         "multiplier": multiplier,
-        "rank": player_cultivator.rank,
-        "stage": player_cultivator.stage,
+        "rank": cultivator.rank,
+        "stage": cultivator.stage,
         "gu_costs": costs
     }

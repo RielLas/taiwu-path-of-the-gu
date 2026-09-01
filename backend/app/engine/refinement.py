@@ -6,7 +6,7 @@ ruthless reactant destruction, and meridian backlash damage.
 
 import random
 from typing import Dict, Any, Optional, Tuple, List
-from app.engine.cultivator import player_cultivator
+from app.engine.cultivator import get_cultivator
 
 # Canonical Gu Refinement Recipe Catalog
 RECIPES: List[Dict[str, Any]] = [
@@ -142,7 +142,8 @@ def calculate_refinement_rate(target_path: str, base_rate: float = 0.40) -> floa
     Calculates final success rate:
     Base (40%) + 1% per relevant Dao Mark (Target Path + Refinement Path).
     """
-    dao_marks = getattr(player_cultivator, "dao_marks", {})
+    cultivator = get_cultivator(1)
+    dao_marks = getattr(cultivator, "dao_marks", {})
     relevant_marks = dao_marks.get(target_path, 0) + dao_marks.get("Refinement Path", 0)
     
     bonus = relevant_marks * 0.01  # +1% per mark
@@ -161,8 +162,9 @@ def execute_gu_refinement(gu_a_id: str, gu_b_id: str) -> Dict[str, Any]:
             "message": "❌ The Grand Dao forbids refining a Gu with itself!"
         }
         
+    cultivator = get_cultivator(1)
     # Search in player's aperture and vault
-    all_gu = player_cultivator.aperture + player_cultivator.vault
+    all_gu = cultivator.aperture + cultivator.vault
     gu_a = next((g for g in all_gu if g.get("id") == gu_a_id), None)
     gu_b = next((g for g in all_gu if g.get("id") == gu_b_id), None)
     
@@ -175,29 +177,29 @@ def execute_gu_refinement(gu_a_id: str, gu_b_id: str) -> Dict[str, Any]:
     recipe, result_template, stone_cost, target_path = find_matching_recipe(gu_a, gu_b)
     
     # Check Primeval Stones
-    if player_cultivator.spirit_stones < stone_cost:
+    if cultivator.spirit_stones < stone_cost:
         return {
             "success": False,
-            "message": f"❌ Insufficient Primeval Stones! Refinement requires {stone_cost} Stones (You have {player_cultivator.spirit_stones})."
+            "message": f"❌ Insufficient Primeval Stones! Refinement requires {stone_cost} Stones (You have {cultivator.spirit_stones})."
         }
         
     # Deduct Primeval Stones immediately (cost of cauldron ignition)
-    player_cultivator.spirit_stones -= stone_cost
+    cultivator.spirit_stones -= stone_cost
     
     # Calculate Success Probability
     base_rate = recipe["base_rate"] if recipe else 0.40
     final_rate = calculate_refinement_rate(target_path, base_rate)
     
     # Remove reactants from aperture / vault
-    if gu_a in player_cultivator.aperture:
-        player_cultivator.aperture.remove(gu_a)
-    elif gu_a in player_cultivator.vault:
-        player_cultivator.vault.remove(gu_a)
+    if gu_a in cultivator.aperture:
+        cultivator.aperture.remove(gu_a)
+    elif gu_a in cultivator.vault:
+        cultivator.vault.remove(gu_a)
         
-    if gu_b in player_cultivator.aperture:
-        player_cultivator.aperture.remove(gu_b)
-    elif gu_b in player_cultivator.vault:
-        player_cultivator.vault.remove(gu_b)
+    if gu_b in cultivator.aperture:
+        cultivator.aperture.remove(gu_b)
+    elif gu_b in cultivator.vault:
+        cultivator.vault.remove(gu_b)
         
     # Roll the Dao Dice
     roll = random.random()
@@ -207,10 +209,12 @@ def execute_gu_refinement(gu_a_id: str, gu_b_id: str) -> Dict[str, Any]:
         new_id = f"gu_{result_template['name'].lower().replace(' ', '_')}_{int(random.random() * 10000)}"
         created_gu = dict(result_template)
         created_gu["id"] = new_id
+        if "satiety" not in created_gu:
+            created_gu["satiety"] = 100
         
         # Place new Gu in vault (or aperture if room)
-        player_cultivator.vault.append(created_gu)
-        player_cultivator.save_to_db()
+        cultivator.vault.append(created_gu)
+        cultivator.save_to_db()
         
         return {
             "success": True,
@@ -220,15 +224,15 @@ def execute_gu_refinement(gu_a_id: str, gu_b_id: str) -> Dict[str, Any]:
             "consumed_gu": [gu_a["name"], gu_b["name"]],
             "stone_cost": stone_cost,
             "success_rate": round(final_rate * 100, 1),
-            "cultivator": player_cultivator.get_stats()
+            "cultivator": cultivator.get_stats()
         }
     else:
         # Ruthless Refinement Backlash: 20% Max HP Damage
-        stats = player_cultivator.get_stats()
+        stats = cultivator.get_stats()
         max_hp = stats.get("max_hp", 100)
         damage_taken = max(1, int(max_hp * 0.20))
-        player_cultivator.current_hp = max(1, player_cultivator.current_hp - damage_taken)
-        player_cultivator.save_to_db()
+        cultivator.current_hp = max(1, cultivator.current_hp - damage_taken)
+        cultivator.save_to_db()
         
         return {
             "success": False,
@@ -239,5 +243,5 @@ def execute_gu_refinement(gu_a_id: str, gu_b_id: str) -> Dict[str, Any]:
             "consumed_gu": [gu_a["name"], gu_b["name"]],
             "stone_cost": stone_cost,
             "success_rate": round(final_rate * 100, 1),
-            "cultivator": player_cultivator.get_stats()
+            "cultivator": cultivator.get_stats()
         }

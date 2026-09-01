@@ -41,6 +41,7 @@ def init_db():
         last_stamina_update REAL NOT NULL,
         essence_type TEXT NOT NULL,
         spirit_stones INTEGER NOT NULL,
+        primeval_stones INTEGER DEFAULT 65,
         player_pos_x INTEGER NOT NULL,
         player_pos_y INTEGER NOT NULL,
         base_strength INTEGER NOT NULL,
@@ -60,6 +61,10 @@ def init_db():
     columns = [col[1] for col in cursor.fetchall()]
     if "current_region_id" not in columns:
         cursor.execute("ALTER TABLE cultivator_state ADD COLUMN current_region_id TEXT DEFAULT 'southern_border_gu_yue'")
+    if "primeval_stones" not in columns:
+        cursor.execute("ALTER TABLE cultivator_state ADD COLUMN primeval_stones INTEGER DEFAULT 65")
+    if "vault" not in columns:
+        cursor.execute("ALTER TABLE cultivator_state ADD COLUMN vault TEXT DEFAULT '[]'")
     conn.commit()
     conn.close()
 

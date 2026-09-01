@@ -5,7 +5,7 @@ Calculates exact BEU essence costs, damages, killer moves, and plunder loot reso
 
 import random
 from typing import Dict, Any, Optional, List
-from app.engine.cultivator import player_cultivator
+from app.engine.cultivator import get_cultivator
 from app.engine.npc import enforcer_manager
 
 def calculate_gu_combat_cost(beu_cost: float) -> float:
@@ -13,7 +13,8 @@ def calculate_gu_combat_cost(beu_cost: float) -> float:
     Computes exact fractional % drain using the cultivator's exponential essence multiplier.
     Actual % Drain = Gu BEU Cost / get_essence_multiplier()
     """
-    multiplier = player_cultivator.get_essence_multiplier()
+    cultivator = get_cultivator(1)
+    multiplier = cultivator.get_essence_multiplier()
     return max(0.01, round(beu_cost / multiplier, 2))
 
 def resolve_combat_plunder(
@@ -27,8 +28,9 @@ def resolve_combat_plunder(
     - 30% chance to plunder one of the Enforcer's active Gu worms directly into Vault.
     - Persists state to SQLite DB.
     """
+    cultivator = get_cultivator(1)
     stones = reward_stones if (reward_stones is not None and reward_stones > 0) else random.randint(50, 150)
-    player_cultivator.spirit_stones += stones
+    cultivator.spirit_stones += stones
     
     dropped_gu = None
     if is_enforcer:
@@ -36,10 +38,12 @@ def resolve_combat_plunder(
         loot = enforcer.generate_loot()
         dropped_gu = loot.get("dropped_gu")
         if dropped_gu:
-            if len(player_cultivator.vault) < player_cultivator.get_vault_capacity():
-                player_cultivator.vault.append(dropped_gu)
+            if "satiety" not in dropped_gu:
+                dropped_gu["satiety"] = 100
+            if len(cultivator.vault) < cultivator.get_vault_capacity():
+                cultivator.vault.append(dropped_gu)
             else:
-                player_cultivator.aperture.append(dropped_gu)
+                cultivator.aperture.append(dropped_gu)
         enforcer.status = "defeated"
         enforcer.active = False
     elif random.random() <= 0.30:
@@ -75,13 +79,13 @@ def resolve_combat_plunder(
         ]
         chosen = random.choice(gu_loot_table)
         dropped_gu = chosen
-        if len(player_cultivator.vault) < player_cultivator.get_vault_capacity():
-            player_cultivator.vault.append(dropped_gu)
+        if len(cultivator.vault) < cultivator.get_vault_capacity():
+            cultivator.vault.append(dropped_gu)
         else:
-            player_cultivator.aperture.append(dropped_gu)
+            cultivator.aperture.append(dropped_gu)
 
     # Persist updated state to DB
-    player_cultivator.save_to_db()
+    cultivator.save_to_db()
 
     msg = f"🎁 Plundered +{stones} Primeval Stones!"
     if dropped_gu:
@@ -92,5 +96,5 @@ def resolve_combat_plunder(
         "stones": stones,
         "dropped_gu": dropped_gu,
         "message": msg,
-        "cultivator": player_cultivator.get_stats()
+        "cultivator": cultivator.get_stats()
     }
