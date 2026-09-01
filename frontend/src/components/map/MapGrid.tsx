@@ -452,13 +452,13 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
                     zIndex: (tile.x + tile.y) * 2 + (isPlayerHere ? 100 : 0)
                   }}
                   className={`
-                    bg-[#1a1c1a] border border-[#2a2c2a] rounded-2xl overflow-hidden select-none transition-all duration-150
-                    ${isAdjacent ? 'cursor-pointer hover:border-amber-400 border-2 hover:scale-105' : 'cursor-default'}
-                    ${isPlayerHere ? 'border-2 border-[#c89b3c] shadow-[0_0_20px_rgba(200,155,60,0.7)]' : ''}
+                    absolute bg-transparent border-none overflow-visible select-none transition-all duration-150
+                    ${isAdjacent ? 'cursor-pointer hover:scale-105 hover:filter hover:drop-shadow-[0_0_10px_rgba(245,158,11,0.6)]' : 'cursor-default'}
+                    ${isPlayerHere ? 'filter drop-shadow-[0_0_12px_rgba(200,155,60,0.8)]' : ''}
                   `}
                   title={`${isEnforcerHere ? `⚔️ ${enforcer?.name}` : isWayStation ? '🏮 Way Station' : isFaction ? `Faction Outpost: ${tile.faction}` : tile.type} (${tile.x}, ${tile.y})`}
                 >
-                  {/* Base Terrain Asset Image with Fallback (z-0) */}
+                  {/* Base Terrain Asset Image (z-0) */}
                   <img
                     src={tileAssetSrc}
                     alt={`${tile.type || 'Tile Terrain'} [${tile.x}, ${tile.y}]`}
@@ -470,11 +470,6 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
                     }`}
                     loading="lazy"
                   />
-
-                  {/* Fallback Coordinate Indicator */}
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-40">
-                    <span className="text-[10px] text-zinc-400 font-mono font-bold">[{tile.x},{tile.y}]</span>
-                  </div>
 
                   {/* Faction Node Overlay Badge (z-10) */}
                   {isFaction && tile.discovered && (
