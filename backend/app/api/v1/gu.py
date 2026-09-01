@@ -93,6 +93,7 @@ async def refine_gu(payload: Dict[str, Any]):
         player_cultivator.current_hp = max(1, player_cultivator.current_hp - damage_taken)
         result["damage_taken"] = damage_taken
         
+    player_cultivator.save_to_db()
     result["cultivator"] = player_cultivator.get_stats()
     return result
 
@@ -120,6 +121,7 @@ async def capture_wild_gu(payload: Dict[str, Any]):
     }
     
     player_cultivator.aperture.append(gu_entry)
+    player_cultivator.save_to_db()
     return {
         "success": True,
         "message": f"Successfully subdued and stored {gu_entry['name']} into your Aperture!",

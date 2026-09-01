@@ -422,6 +422,8 @@ async def combat_action(payload: Dict[str, Any]):
             enforcer_manager.enforcer.active = False
             
         player_cultivator.spirit_stones += reward_stones
+        
+    player_cultivator.save_to_db()
 
     logs = [
         action_log if action_type != "flee" else "Attempting to escape the battlefield...",

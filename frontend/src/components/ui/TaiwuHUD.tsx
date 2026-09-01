@@ -59,7 +59,7 @@ export default function TaiwuHUD({ activeTab, setActiveTab }: TaiwuHUDProps) {
         
         {/* Meditate Toast Notification */}
         {meditateToast && (
-          <div className="absolute -top-16 left-1/2 -translate-x-1/2 z-40 px-4 py-2 bg-[#12100d]/95 border border-[#c89b3c] rounded-xl text-xs font-sans font-bold text-amber-200 shadow-[0_0_25px_rgba(200,155,60,0.4)] animate-fade-in pointer-events-none whitespace-nowrap">
+          <div className="absolute -top-16 right-6 md:right-14 z-40 px-4 py-2 bg-[#12100d]/95 border border-[#c89b3c] rounded-xl text-xs font-sans font-bold text-amber-200 shadow-[0_0_25px_rgba(200,155,60,0.4)] animate-fade-in pointer-events-none whitespace-nowrap">
             {meditateToast}
           </div>
         )}
@@ -70,12 +70,12 @@ export default function TaiwuHUD({ activeTab, setActiveTab }: TaiwuHUDProps) {
           {/* Subtle top glow line */}
           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[80%] h-[1px] bg-gradient-to-r from-transparent via-[#8a8275] to-transparent opacity-50"></div>
 
-          {/* Stamina & Meditate Floating Island Header */}
-          <div className="absolute -top-6 left-1/2 -translate-x-1/2 flex items-center gap-3 z-30 pointer-events-auto">
+          {/* Far-Right Floating Stamina & Meditate Console (Decoupled from Center Sphere) */}
+          <div className="absolute -top-6 right-6 md:right-14 flex items-center gap-2.5 z-30 pointer-events-auto">
             {/* Stamina Pool Gauge */}
-            <div className="bg-[#12100d]/95 backdrop-blur-md border border-[#c89b3c]/40 px-3.5 py-1 rounded-full flex items-center gap-2 shadow-lg">
-              <span className="text-amber-400 text-xs font-bold font-mono">⚡ {cultivator?.stamina ?? 100} / {cultivator?.max_stamina ?? 100}</span>
-              <div className="w-16 h-1.5 bg-[#0a0907] rounded-full overflow-hidden border border-[#2a2620]">
+            <div className="bg-[#12100d]/95 backdrop-blur-md border border-[#c89b3c]/40 px-3 py-1 rounded-full flex items-center gap-2 shadow-xl">
+              <span className="text-amber-400 text-xs font-bold font-mono">⚡ {Math.round(cultivator?.stamina ?? 100)} / {cultivator?.max_stamina ?? 100}</span>
+              <div className="w-14 h-1.5 bg-[#0a0907] rounded-full overflow-hidden border border-[#2a2620]">
                 <div 
                   className="h-full bg-gradient-to-r from-amber-600 to-amber-300 rounded-full transition-all duration-300"
                   style={{ width: `${Math.min(100, Math.max(0, ((cultivator?.stamina ?? 100) / (cultivator?.max_stamina || 100)) * 100))}%` }}
@@ -88,7 +88,7 @@ export default function TaiwuHUD({ activeTab, setActiveTab }: TaiwuHUDProps) {
             <button
               onClick={handleMeditate}
               disabled={isMeditating || (cultivator?.stamina || 0) < 20}
-              className={`px-3 py-1 rounded-full text-[10px] font-sans font-bold uppercase tracking-wider transition-all border flex items-center gap-1.5 shadow-lg cursor-pointer ${
+              className={`px-3 py-1 rounded-full text-[10px] font-sans font-bold uppercase tracking-wider transition-all border flex items-center gap-1.5 shadow-xl cursor-pointer ${
                 (cultivator?.stamina || 0) >= 20 && !isMeditating
                   ? 'bg-gradient-to-r from-amber-950 via-[#241a12] to-amber-900 border-[#c89b3c] text-amber-200 hover:brightness-125 hover:shadow-[0_0_15px_rgba(200,155,60,0.5)] active:scale-95'
                   : 'bg-black/60 border-zinc-800 text-zinc-600 cursor-not-allowed'

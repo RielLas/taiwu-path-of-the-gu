@@ -7,7 +7,9 @@ Active Gu (e.g., Moonlight Gu, Blood Frenzy Gu) are used in actions/battles cons
 """
 
 import time
+import json
 from typing import List, Dict, Any, Optional
+from app.core.db import get_db_connection
 
 class CultivatorState:
     def __init__(self):
@@ -22,7 +24,7 @@ class CultivatorState:
         self.nourish_progress: float = 0.0
         self.stamina: float = 100.0
         self.max_stamina: float = 100.0
-        self.last_stamina_regen: float = time.time()
+        self.last_stamina_update: float = time.time()
         self.essence_type: str = "Rank 1 Initial Green Copper Primeval Essence"
         self.spirit_stones: int = 65
         self.player_pos: List[int] = [7, 7]  # [x, y]
@@ -183,17 +185,128 @@ class CultivatorState:
             }
         ]
 
+    def save_to_db(self) -> None:
+        """
+        Persists the current cultivator state to the SQLite database.
+        """
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            now = time.time()
+            cursor.execute("""
+            INSERT INTO cultivator_state (
+                id, name, rank, stage, aperture_grade, aptitude_percentage, aperture_status,
+                primeval_essence, max_essence, nourish_progress, stamina, max_stamina,
+                last_stamina_update, essence_type, spirit_stones, player_pos_x, player_pos_y,
+                base_strength, base_defense, base_speed, current_hp, alignment_score,
+                faction_reputations, active_bounties, aperture, vault, updated_at
+            ) VALUES (
+                1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+            )
+            ON CONFLICT(id) DO UPDATE SET
+                name=excluded.name,
+                rank=excluded.rank,
+                stage=excluded.stage,
+                aperture_grade=excluded.aperture_grade,
+                aptitude_percentage=excluded.aptitude_percentage,
+                aperture_status=excluded.aperture_status,
+                primeval_essence=excluded.primeval_essence,
+                max_essence=excluded.max_essence,
+                nourish_progress=excluded.nourish_progress,
+                stamina=excluded.stamina,
+                max_stamina=excluded.max_stamina,
+                last_stamina_update=excluded.last_stamina_update,
+                essence_type=excluded.essence_type,
+                spirit_stones=excluded.spirit_stones,
+                player_pos_x=excluded.player_pos_x,
+                player_pos_y=excluded.player_pos_y,
+                base_strength=excluded.base_strength,
+                base_defense=excluded.base_defense,
+                base_speed=excluded.base_speed,
+                current_hp=excluded.current_hp,
+                alignment_score=excluded.alignment_score,
+                faction_reputations=excluded.faction_reputations,
+                active_bounties=excluded.active_bounties,
+                aperture=excluded.aperture,
+                vault=excluded.vault,
+                updated_at=excluded.updated_at
+            """, (
+                self.name, self.rank, self.stage, self.aperture_grade, self.aptitude_percentage, self.aperture_status,
+                self.primeval_essence, self.max_essence, self.nourish_progress, self.stamina, self.max_stamina,
+                self.last_stamina_update, self.essence_type, self.spirit_stones, self.player_pos[0], self.player_pos[1],
+                self.base_strength, self.base_defense, self.base_speed, self.current_hp, self.alignment_score,
+                json.dumps(self.faction_reputations), json.dumps(self.active_bounties),
+                json.dumps(self.aperture), json.dumps(self.vault), now
+            ))
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            print(f"Failed to persist cultivator state to DB: {e}")
+
+    def load_from_db(self) -> bool:
+        """
+        Loads cultivator state from SQLite database.
+        If found, immediately applies retroactive stamina for elapsed offline time.
+        """
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM cultivator_state WHERE id = 1")
+            row = cursor.fetchone()
+            conn.close()
+            
+            if not row:
+                self.save_to_db()
+                return False
+                
+            self.name = row["name"]
+            self.rank = row["rank"]
+            self.stage = row["stage"]
+            self.aperture_grade = row["aperture_grade"]
+            self.aptitude_percentage = float(row["aptitude_percentage"])
+            self.aperture_status = row["aperture_status"]
+            self.primeval_essence = float(row["primeval_essence"])
+            self.max_essence = float(row["max_essence"])
+            self.nourish_progress = float(row["nourish_progress"])
+            self.stamina = float(row["stamina"])
+            self.max_stamina = float(row["max_stamina"])
+            self.last_stamina_update = float(row["last_stamina_update"])
+            self.essence_type = row["essence_type"]
+            self.spirit_stones = int(row["spirit_stones"])
+            self.player_pos = [int(row["player_pos_x"]), int(row["player_pos_y"])]
+            self.base_strength = int(row["base_strength"])
+            self.base_defense = int(row["base_defense"])
+            self.base_speed = int(row["base_speed"])
+            self.current_hp = int(row["current_hp"])
+            self.alignment_score = int(row["alignment_score"])
+            self.faction_reputations = json.loads(row["faction_reputations"])
+            self.active_bounties = json.loads(row["active_bounties"])
+            self.aperture = json.loads(row["aperture"])
+            self.vault = json.loads(row["vault"])
+            
+            # Immediately calculate retroactive stamina for time offline
+            self.update_stamina_passive()
+            return True
+        except Exception as e:
+            print(f"Error loading from DB: {e}")
+            return False
+
     def update_stamina_passive(self) -> None:
         """
-        Passive Stamina Recovery Engine:
-        Regenerates +1 Stamina per real-time minute (60 seconds) elapsed.
+        Retroactive Stamina Engine:
+        Calculates time elapsed since last_stamina_update.
+        Adds +1 Stamina per real-time minute (60 seconds) elapsed.
+        Caps at max_stamina, updates last_stamina_update timestamp, and saves state to DB.
         """
         now = time.time()
-        elapsed = max(0.0, now - self.last_stamina_regen)
+        elapsed = max(0.0, now - self.last_stamina_update)
         if elapsed >= 1.0:
-            stamina_gain = elapsed / 60.0  # 1 stamina per 60 seconds
+            stamina_gain = elapsed / 60.0  # +1 stamina per 60s
+            old_stamina = self.stamina
             self.stamina = min(self.max_stamina, round(self.stamina + stamina_gain, 2))
-            self.last_stamina_regen = now
+            self.last_stamina_update = now
+            if self.stamina != old_stamina:
+                self.save_to_db()
 
     def get_stats(self) -> Dict[str, Any]:
         """
@@ -593,6 +706,7 @@ class CultivatorState:
             self.base_strength += 15
             self.base_defense += 10
             self.base_speed += 5
+            self.save_to_db()
             
             return {
                 "success": True,
@@ -609,6 +723,7 @@ class CultivatorState:
                 self.aptitude_percentage = max(10.0, round(self.aptitude_percentage - 5.0, 1))
                 self.max_essence = self.aptitude_percentage
                 self.primeval_essence = min(self.primeval_essence, self.max_essence)
+                self.save_to_db()
                 return {
                     "success": False,
                     "wall_broken": False,
@@ -617,6 +732,7 @@ class CultivatorState:
                     "cultivator": self.get_stats()
                 }
             else:
+                self.save_to_db()
                 return {
                     "success": False,
                     "wall_broken": False,
@@ -645,6 +761,7 @@ class CultivatorState:
             
         # Restore basic HP on revive
         self.current_hp = max(20, self.base_defense * 5)
+        self.save_to_db()
         
         return {
             "success": True,
@@ -696,6 +813,7 @@ class CultivatorState:
         # Move from vault to aperture
         self.vault.remove(gu)
         self.aperture.append(gu)
+        self.save_to_db()
         
         return {
             "success": True,
@@ -737,6 +855,7 @@ class CultivatorState:
         # Move from aperture to vault
         self.aperture.remove(gu)
         self.vault.append(gu)
+        self.save_to_db()
         
         return {
             "success": True,
@@ -790,6 +909,7 @@ class CultivatorState:
         self.spirit_stones -= cost
         gu["satiety"] = 100
         gu["hunger"] = 100
+        self.save_to_db()
 
         return {
             "success": True,
@@ -844,6 +964,7 @@ class CultivatorState:
         for dead in dead_vault:
             self.vault.remove(dead)
 
+        self.save_to_db()
         return death_alerts
 
     def get_vault_data(self) -> Dict[str, Any]:
@@ -911,6 +1032,7 @@ class CultivatorState:
             "threat_level": "Severe" if new_rep <= -60 else "High"
         }
         self.active_bounties.append(bounty)
+        self.save_to_db()
 
         return {
             "success": True,
@@ -967,6 +1089,7 @@ class CultivatorState:
         new_rep = min(100, old_rep + 5)
         self.faction_reputations[faction_name] = new_rep
         self.alignment_score = min(100, self.alignment_score + 2)
+        self.save_to_db()
 
         return {
             "success": True,
@@ -1112,6 +1235,7 @@ class CultivatorState:
                 stage_promoted = True
 
         self.essence_type = self.get_essence_type()
+        self.save_to_db()
         
         if stage_promoted:
             msg = f"✨ STAGE BREAKTHROUGH! By washing the aperture crystal walls, your essence has condensed! Advanced from {old_stage} to {self.stage} (Essence Multiplier: {self.get_essence_multiplier():.0f}x)!"
@@ -1163,6 +1287,7 @@ class CultivatorState:
         hp_recovery = max(20, int(max_hp * 0.35))
         self.current_hp = min(max_hp, self.current_hp + hp_recovery)
         actual_hp_restored = self.current_hp - old_hp
+        self.save_to_db()
         
         return {
             "success": True,
@@ -1173,6 +1298,8 @@ class CultivatorState:
             "cultivator": self.get_stats()
         }
 
-# Global in-memory singleton for the prototype session
+# Global singleton persistent cultivator instance
 player_cultivator = CultivatorState()
+player_cultivator.load_from_db()
+
 

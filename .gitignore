@@ -42,6 +42,7 @@ lerna-debug.log*
 *.ntvs*
 *.njsproj
 *.sln
-*.sw?
-.DS_Store
-Thumbs.db
+# Databases
+*.db
+*.sqlite
+*.sqlite3
