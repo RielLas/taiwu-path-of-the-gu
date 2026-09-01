@@ -5,7 +5,11 @@ import { playJadeClinkSound, playBrushSound } from '../../hooks/useAudio';
 import type { GuWorm } from '../../types/api';
 import uiPanelImg from '../../assets/ui_panel.webp';
 
-export default function GuVault() {
+interface GuVaultProps {
+  compact?: boolean;
+}
+
+export default function GuVault({ compact = false }: GuVaultProps) {
   const { 
     equippedGu, vaultGu, vault, vaultCapacity, maxActiveSlots, equippedActiveCount,
     isLoading, feedbackMessage, fetchVault, equipGu, unequipGu, feedGu, consumeStone,
@@ -64,7 +68,7 @@ export default function GuVault() {
     activeCombatGu[2] || null
   ];
 
-  // Map 32 total slots in the 8-column CSS matrix
+  // 32 slots total in the 8-column CSS matrix
   const TOTAL_GRID_SLOTS = 32;
   const gridSlots: (any | null)[] = Array.from({ length: TOTAL_GRID_SLOTS }).map((_, idx) => {
     return vaultItems[idx] || null;
@@ -132,42 +136,44 @@ export default function GuVault() {
     <div className="w-full max-w-6xl mx-auto flex flex-col gap-6 font-serif select-none animate-fade-in z-10">
       
       {/* Top Vault Summary Ribbon */}
-      <div className="bg-[#12100d]/90 backdrop-blur-md border border-[#2a2620] rounded-2xl p-4 shadow-xl flex flex-wrap items-center justify-between gap-4 font-sans text-xs">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-[#c89b3c]/10 border border-[#c89b3c]/60 flex items-center justify-center text-lg shadow-[0_0_15px_rgba(200,155,60,0.2)]">
-            🏺
+      {!compact && (
+        <div className="bg-[#12100d]/90 backdrop-blur-md border border-[#2a2620] rounded-2xl p-4 shadow-xl flex flex-wrap items-center justify-between gap-4 font-sans text-xs">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-[#c89b3c]/10 border border-[#c89b3c]/60 flex items-center justify-center text-lg shadow-[0_0_15px_rgba(200,155,60,0.2)]">
+              🏺
+            </div>
+            <div>
+              <h3 className="text-sm font-serif font-bold text-[#d5cfc4] tracking-wider">Primeval Gu Vault & Physical Ledger</h3>
+              <span className="text-[10px] text-[#8a8275] uppercase tracking-wider">
+                Physical Storage Ledger • Rank {cultivator?.rank || 1} Aperture Matrix
+              </span>
+            </div>
           </div>
-          <div>
-            <h3 className="text-sm font-serif font-bold text-[#d5cfc4] tracking-wider">Primeval Gu Vault & Ledger</h3>
-            <span className="text-[10px] text-[#8a8275] uppercase tracking-wider">
-              Physical Storage Ledger • Rank {cultivator?.rank || 1} Aperture Matrix
-            </span>
+
+          <div className="flex flex-wrap gap-3">
+            <div className="bg-black/60 px-3.5 py-2 rounded-xl border border-[#c89b3c]/50 flex flex-col shadow-inner">
+              <span className="text-[10px] text-[#8a8275] uppercase font-bold">Primeval Wealth</span>
+              <span className="font-bold text-sm text-[#c89b3c] font-mono">
+                💎 {playerStones} Stones
+              </span>
+            </div>
+
+            <div className="bg-black/60 px-3.5 py-2 rounded-xl border border-[#2a2620] flex flex-col">
+              <span className="text-[10px] text-[#8a8275] uppercase font-bold">Active Combat Slots</span>
+              <span className={`font-bold text-sm font-mono ${equippedActiveCount >= maxActiveSlots ? 'text-[#c89b3c]' : 'text-emerald-400'}`}>
+                {equippedActiveCount} / {maxActiveSlots} Equipped
+              </span>
+            </div>
+
+            <div className="bg-black/60 px-3.5 py-2 rounded-xl border border-[#2a2620] flex flex-col">
+              <span className="text-[10px] text-[#8a8275] uppercase font-bold">Vault Reserves</span>
+              <span className={`font-bold text-sm font-mono ${vaultGu.length >= vaultCapacity ? 'text-red-400' : 'text-amber-300'}`}>
+                {vaultGu.length} / {vaultCapacity} Gu
+              </span>
+            </div>
           </div>
         </div>
-
-        <div className="flex flex-wrap gap-3">
-          <div className="bg-black/60 px-3.5 py-2 rounded-xl border border-[#c89b3c]/50 flex flex-col shadow-inner">
-            <span className="text-[10px] text-[#8a8275] uppercase font-bold">Primeval Wealth</span>
-            <span className="font-bold text-sm text-[#c89b3c] font-mono">
-              💎 {playerStones} Stones
-            </span>
-          </div>
-
-          <div className="bg-black/60 px-3.5 py-2 rounded-xl border border-[#2a2620] flex flex-col">
-            <span className="text-[10px] text-[#8a8275] uppercase font-bold">Active Combat Slots</span>
-            <span className={`font-bold text-sm font-mono ${equippedActiveCount >= maxActiveSlots ? 'text-[#c89b3c]' : 'text-emerald-400'}`}>
-              {equippedActiveCount} / {maxActiveSlots} Equipped
-            </span>
-          </div>
-
-          <div className="bg-black/60 px-3.5 py-2 rounded-xl border border-[#2a2620] flex flex-col">
-            <span className="text-[10px] text-[#8a8275] uppercase font-bold">Vault Reserves</span>
-            <span className={`font-bold text-sm font-mono ${vaultGu.length >= vaultCapacity ? 'text-red-400' : 'text-amber-300'}`}>
-              {vaultGu.length} / {vaultCapacity} Gu
-            </span>
-          </div>
-        </div>
-      </div>
+      )}
 
       {/* Alert / Feedback Notification */}
       {feedbackMessage && (
@@ -284,18 +290,12 @@ export default function GuVault() {
       </div>
 
       {/* PHASE 1 & PHASE 2: THE GLASSMORPHISM VAULT UI CANVAS & CSS GRID MATRIX */}
-      <div className="relative rounded-3xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.95)] border border-[#cdaa6a]/30">
+      <div className="relative rounded-3xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.95)] border border-[#cdaa6a]/40 bg-[#0e0c0a]/90 backdrop-blur-xl">
         
-        {/* Phase 1: Absolute Background Visual Canvas */}
-        <div className="absolute inset-0 bg-[#0c0a08] pointer-events-none">
-          <img 
-            src={uiPanelImg} 
-            alt="Vault Glassmorphism Panel" 
-            className="w-full h-full object-fill opacity-90 filter drop-shadow-[0_0_30px_rgba(200,155,60,0.15)]"
-          />
-        </div>
+        {/* Background Decorative Wuxia Panel Texture */}
+        <div className="absolute inset-0 opacity-15 pointer-events-none bg-center bg-cover" style={{ backgroundImage: `url(${uiPanelImg})` }} />
 
-        {/* Inner Content Layer (z-10) */}
+        {/* Inner Content Layer */}
         <div className="relative z-10 p-6 md:p-8 flex flex-col lg:flex-row gap-8 items-start">
           
           {/* LEFT: Pure CSS 8-Column Grid Matrix */}
@@ -303,10 +303,10 @@ export default function GuVault() {
             <div className="flex justify-between items-center mb-4 pb-2 border-b border-[#cdaa6a]/20">
               <div>
                 <span className="text-xs uppercase tracking-[0.2em] text-[#cdaa6a] font-sans font-bold block">
-                  Phase 2: Matrix Storage
+                  Storage Matrix
                 </span>
                 <h3 className="text-lg font-serif font-bold text-[#d5cfc4] tracking-wider">
-                  Primeval Vault Grid (8x4 Slots)
+                  Physical Vault Inventory (8×4 Grid)
                 </h3>
               </div>
               <span className="text-[11px] text-[#8a8275] font-sans">
@@ -315,7 +315,7 @@ export default function GuVault() {
             </div>
 
             {/* Pure Tailwind CSS Grid for inventory slots: grid grid-cols-8 gap-3 p-8 */}
-            <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-3 p-6 md:p-8 bg-black/70 backdrop-blur-md rounded-2xl border border-[#cdaa6a]/30 shadow-inner justify-items-center">
+            <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-3 p-6 md:p-8 bg-black/60 backdrop-blur-md rounded-2xl border border-[#cdaa6a]/30 shadow-inner justify-items-center">
               {gridSlots.map((item, slotIndex) => {
                 const isSelected = selectedSlotItem && (
                   (item && selectedSlotItem.id && item.id === selectedSlotItem.id) ||
@@ -342,7 +342,7 @@ export default function GuVault() {
                         : 'border-[#2a2620]/60 hover:border-[#cdaa6a]/20 bg-black/30'
                     }`}
                   >
-                    {/* Phase 3: Data Injection — Centered item icon / transparent sprite */}
+                    {/* Centered item icon */}
                     {hasItem && (
                       <span className="text-2xl filter drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)] group-hover:scale-110 transition-transform">
                         {getItemIcon(item)}
@@ -354,7 +354,7 @@ export default function GuVault() {
                       <span className="absolute top-1 left-1 w-2 h-2 rounded-full bg-red-500 animate-ping" />
                     )}
 
-                    {/* Phase 3: Stackable Quantity in bottom-right corner */}
+                    {/* Stackable Quantity in bottom-right corner */}
                     {hasItem && item.quantity !== undefined && (
                       <span className="absolute bottom-0.5 right-1 text-[10px] font-sans font-bold text-[#cdaa6a] drop-shadow-[0_1px_2px_rgba(0,0,0,0.95)] font-mono leading-none">
                         {item.quantity > 9999 ? `${(item.quantity / 1000).toFixed(1)}k` : item.quantity}

@@ -1,6 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useCultivatorStore } from '../../hooks/useCultivator';
 import { playBrushSound } from '../../hooks/useAudio';
+import GuVault from '../aperture/GuVault';
 
 interface CharacterLedgerProps {
   onClose: () => void;
@@ -8,6 +9,7 @@ interface CharacterLedgerProps {
 
 export default function CharacterLedger({ onClose }: CharacterLedgerProps) {
   const { cultivator, fetchAperture } = useCultivatorStore();
+  const [activeSubTab, setActiveSubTab] = useState<'overview' | 'vault'>('overview');
 
   useEffect(() => {
     fetchAperture();
@@ -18,6 +20,11 @@ export default function CharacterLedger({ onClose }: CharacterLedgerProps) {
   const handleClose = () => {
     playBrushSound();
     onClose();
+  };
+
+  const handleSubTabChange = (tab: 'overview' | 'vault') => {
+    playBrushSound();
+    setActiveSubTab(tab);
   };
 
   // Fallback defaults for deep matrices if backend is still initializing
@@ -132,8 +139,38 @@ export default function CharacterLedger({ onClose }: CharacterLedgerProps) {
         </div>
       </header>
 
-      {/* Main 3-Column Scroll of Taiwu Layout */}
-      <main className="relative z-10 flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+      {/* Sub-Tab Navigation Bar */}
+      <div className="relative z-10 w-full max-w-7xl mx-auto px-6 pt-4 flex gap-3">
+        <button
+          onClick={() => handleSubTabChange('overview')}
+          className={`px-5 py-2 rounded-xl text-xs font-sans font-bold uppercase tracking-wider transition-all border cursor-pointer flex items-center gap-2 ${
+            activeSubTab === 'overview'
+              ? 'bg-[#c89b3c]/20 border-[#c89b3c] text-[#c89b3c] shadow-[0_0_15px_rgba(200,155,60,0.3)]'
+              : 'bg-[#12100d] border-[#2a2620] text-[#8a8275] hover:text-[#d5cfc4]'
+          }`}
+        >
+          <span>📜</span> Character Ledger & Dao Marks
+        </button>
+
+        <button
+          onClick={() => handleSubTabChange('vault')}
+          className={`px-5 py-2 rounded-xl text-xs font-sans font-bold uppercase tracking-wider transition-all border cursor-pointer flex items-center gap-2 ${
+            activeSubTab === 'vault'
+              ? 'bg-[#c89b3c]/20 border-[#c89b3c] text-[#c89b3c] shadow-[0_0_15px_rgba(200,155,60,0.3)]'
+              : 'bg-[#12100d] border-[#2a2620] text-[#8a8275] hover:text-[#d5cfc4]'
+          }`}
+        >
+          <span>🏺</span> Physical Vault & Bag Inventory
+        </button>
+      </div>
+
+      {activeSubTab === 'vault' ? (
+        <div className="relative z-10 flex-1 max-w-7xl w-full mx-auto p-4 md:p-6">
+          <GuVault />
+        </div>
+      ) : (
+        /* Main 3-Column Scroll of Taiwu Layout */
+        <main className="relative z-10 flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         
         {/* ========================================================================= */}
         {/* COLUMN 1: PHYSIOLOGY & DAO MARKS (肉身与道痕) */}
@@ -515,6 +552,7 @@ export default function CharacterLedger({ onClose }: CharacterLedgerProps) {
         </section>
 
       </main>
+      )}
 
     </div>
   );
