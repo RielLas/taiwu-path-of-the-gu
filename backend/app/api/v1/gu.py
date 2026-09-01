@@ -39,13 +39,14 @@ async def get_vault():
 @router.post("/feed")
 async def feed_gu(payload: Dict[str, Any]):
     """
-    Feeds a Gu worm with Primeval Stones to restore satiety (+20 satiety per stone).
+    Feeds a Gu worm with Primeval Stones from Vault to restore satiety (+20 satiety per stone).
+    Handles missing item as insufficient funds.
     """
     gu_id = payload.get("gu_id")
     if not gu_id:
         raise HTTPException(status_code=400, detail="Must provide 'gu_id' to feed.")
         
-    stone_amount = payload.get("stone_amount", payload.get("amount", 1))
+    stone_amount = payload.get("quantity", payload.get("stone_amount", payload.get("amount", 1)))
     try:
         stone_amount = int(stone_amount)
     except (ValueError, TypeError):

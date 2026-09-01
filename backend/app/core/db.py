@@ -21,6 +21,7 @@ def init_db():
     """
     Initializes SQLite database schema if not exists.
     Strictly preserves existing data across server reloads.
+    Primeval stones are now physical inventory items tracked inside the JSON vault.
     """
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -40,8 +41,6 @@ def init_db():
         max_stamina REAL NOT NULL,
         last_stamina_update REAL NOT NULL,
         essence_type TEXT NOT NULL,
-        spirit_stones INTEGER NOT NULL,
-        primeval_stones INTEGER DEFAULT 65,
         player_pos_x INTEGER NOT NULL,
         player_pos_y INTEGER NOT NULL,
         base_strength INTEGER NOT NULL,
@@ -61,8 +60,6 @@ def init_db():
     columns = [col[1] for col in cursor.fetchall()]
     if "current_region_id" not in columns:
         cursor.execute("ALTER TABLE cultivator_state ADD COLUMN current_region_id TEXT DEFAULT 'southern_border_gu_yue'")
-    if "primeval_stones" not in columns:
-        cursor.execute("ALTER TABLE cultivator_state ADD COLUMN primeval_stones INTEGER DEFAULT 65")
     if "vault" not in columns:
         cursor.execute("ALTER TABLE cultivator_state ADD COLUMN vault TEXT DEFAULT '[]'")
     conn.commit()

@@ -1,5 +1,6 @@
 import sqlite3
 import pytest
+import json
 from app.engine.cultivator import CultivatorState, player_cultivator
 from app.core.db import get_db_connection, init_db
 import app.core.db as db_module
@@ -20,7 +21,7 @@ def test_current_region_id_db_persistence():
     # 2. Directly verify SQLite row contents
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT current_region_id, player_pos_x, player_pos_y, spirit_stones, stamina FROM cultivator_state WHERE id = 1")
+    cursor.execute("SELECT current_region_id, player_pos_x, player_pos_y, vault, stamina FROM cultivator_state WHERE id = 1")
     row = cursor.fetchone()
     conn.close()
 
@@ -28,7 +29,9 @@ def test_current_region_id_db_persistence():
     assert row["current_region_id"] == "western_desert_thousand_li"
     assert row["player_pos_x"] == 18
     assert row["player_pos_y"] == 12
-    assert row["spirit_stones"] == 750
+    vault_items = json.loads(row["vault"])
+    stone_qty = sum(item.get("quantity", 0) for item in vault_items if item.get("item_id") == "primeval_stone" or item.get("id") == "primeval_stone")
+    assert stone_qty == 750
 
     # 3. Simulate new server process by loading into a brand new CultivatorState instance
     fresh_instance = CultivatorState()

@@ -37,17 +37,18 @@ async def meditate(payload: Dict[str, Any] = {}):
 async def consume_primeval_stone(payload: Dict[str, Any] = {}):
     """
     The Thermodynamics of Primeval Stones:
-    Deducts specified amount of Primeval Stones to instantly restore 5% Max Essence per stone.
+    Deducts specified quantity of Primeval Stones from the JSON Vault ledger to instantly restore
+    (quantity * max_essence * 0.05) Primeval Essence.
     Completely bypasses Stamina drain of standard meditation.
     """
-    amount = payload.get("amount", 1)
+    quantity = payload.get("quantity", payload.get("amount", 1))
     try:
-        amount = int(amount)
+        quantity = int(quantity)
     except (ValueError, TypeError):
-        raise HTTPException(status_code=400, detail="Stone amount must be an integer.")
+        raise HTTPException(status_code=400, detail="Stone quantity must be an integer.")
         
     cultivator = get_cultivator(1)
-    result = cultivator.consume_primeval_stones(amount)
+    result = cultivator.consume_primeval_stones(quantity)
     if not result.get("success"):
         raise HTTPException(status_code=400, detail=result.get("message", "Failed to consume stones."))
     return result

@@ -1,4 +1,5 @@
 import pytest
+import json
 from fastapi.testclient import TestClient
 from app.engine.cultivator import player_cultivator, CultivatorState
 from app.core.db import get_db_connection
@@ -38,12 +39,14 @@ def test_sql_injection_and_payload_sanitization_in_travel(client: TestClient):
         table = cursor.fetchone()
         assert table is not None, "cultivator_state table was dropped or corrupted by SQL injection!"
         
-        cursor.execute("SELECT current_region_id, stamina, spirit_stones FROM cultivator_state WHERE id = 1")
+        cursor.execute("SELECT current_region_id, stamina, vault FROM cultivator_state WHERE id = 1")
         row = cursor.fetchone()
         conn.close()
         
         assert row["current_region_id"] == "southern_border_gu_yue"
-        assert row["spirit_stones"] == 1000
+        vault_items = json.loads(row["vault"])
+        stone_qty = sum(item.get("quantity", 0) for item in vault_items if item.get("item_id") == "primeval_stone" or item.get("id") == "primeval_stone")
+        assert stone_qty == 1000
 
 def test_fuzzing_malformed_travel_json_payloads(client: TestClient):
     """

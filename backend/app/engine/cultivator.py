@@ -27,7 +27,6 @@ class CultivatorState:
         self.max_stamina: float = 100.0
         self.last_stamina_update: float = time.time()
         self.essence_type: str = "Rank 1 Initial Green Copper Primeval Essence"
-        self.spirit_stones: int = 65
         self.current_region_id: str = "southern_border_gu_yue"
         self.player_pos: List[int] = [15, 15]  # [x, y]
         self.current_node: dict = None  # tracks the current explorable node
@@ -150,8 +149,16 @@ class CultivatorState:
             }
         ]
         
-        # Inactive Gu Vault Storage (Capacity = Rank * 5)
+        # Inactive Gu & Wealth Vault Storage (Physical JSON Item Ledger)
         self.vault: List[Dict[str, Any]] = [
+            {
+                "item_id": "primeval_stone",
+                "id": "primeval_stone",
+                "name": "Primeval Stone",
+                "quantity": 500,
+                "type": "material",
+                "description": "Standard currency and essence recovery medium of the Gu World."
+            },
             {
                 "id": "gu_little_light",
                 "name": "Little Light Gu",
@@ -186,13 +193,82 @@ class CultivatorState:
             }
         ]
 
+    def get_primeval_stones_count(self) -> int:
+        """
+        Calculates the total Primeval Stones currently stored in the Vault JSON ledger.
+        """
+        total = 0
+        for item in self.vault:
+            if item.get("item_id") == "primeval_stone" or item.get("id") == "primeval_stone":
+                total += int(item.get("quantity", 0))
+        return total
+
+    def deduct_primeval_stones(self, amount: int) -> bool:
+        """
+        Deducts primeval stones from the Vault JSON ledger.
+        """
+        if amount <= 0:
+            return True
+            
+        stone_item = next((item for item in self.vault if item.get("item_id") == "primeval_stone" or item.get("id") == "primeval_stone"), None)
+        if not stone_item:
+            return False
+            
+        current_qty = int(stone_item.get("quantity", 0))
+        if current_qty < amount:
+            return False
+            
+        stone_item["quantity"] = current_qty - amount
+        return True
+
+    def add_primeval_stones(self, amount: int) -> int:
+        """
+        Adds primeval stones to the Vault JSON ledger.
+        """
+        if amount <= 0:
+            return self.get_primeval_stones_count()
+            
+        stone_item = next((item for item in self.vault if item.get("item_id") == "primeval_stone" or item.get("id") == "primeval_stone"), None)
+        if stone_item:
+            stone_item["quantity"] = int(stone_item.get("quantity", 0)) + amount
+        else:
+            self.vault.insert(0, {
+                "item_id": "primeval_stone",
+                "id": "primeval_stone",
+                "name": "Primeval Stone",
+                "quantity": amount,
+                "type": "material",
+                "description": "Standard currency and essence recovery medium of the Gu World."
+            })
+        return self.get_primeval_stones_count()
+
     @property
     def primeval_stones(self) -> int:
-        return self.spirit_stones
+        return self.get_primeval_stones_count()
 
     @primeval_stones.setter
     def primeval_stones(self, val: int):
-        self.spirit_stones = int(val)
+        target = max(0, int(val))
+        stone_item = next((item for item in self.vault if item.get("item_id") == "primeval_stone" or item.get("id") == "primeval_stone"), None)
+        if stone_item:
+            stone_item["quantity"] = target
+        else:
+            self.vault.insert(0, {
+                "item_id": "primeval_stone",
+                "id": "primeval_stone",
+                "name": "Primeval Stone",
+                "quantity": target,
+                "type": "material",
+                "description": "Standard currency and essence recovery medium of the Gu World."
+            })
+
+    @property
+    def spirit_stones(self) -> int:
+        return self.get_primeval_stones_count()
+
+    @spirit_stones.setter
+    def spirit_stones(self, val: int):
+        self.primeval_stones = val
 
     def get_aperture_capacity(self) -> int:
         return 5
@@ -203,6 +279,7 @@ class CultivatorState:
     def save_to_db(self) -> None:
         """
         Persists the current cultivator state to the SQLite database.
+        Wealth and items are stored inside the JSON vault column.
         """
         try:
             conn = get_db_connection()
@@ -213,11 +290,11 @@ class CultivatorState:
             INSERT INTO cultivator_state (
                 id, name, rank, stage, aperture_grade, aptitude_percentage, aperture_status,
                 primeval_essence, max_essence, nourish_progress, stamina, max_stamina,
-                last_stamina_update, essence_type, spirit_stones, primeval_stones, player_pos_x, player_pos_y,
+                last_stamina_update, essence_type, player_pos_x, player_pos_y,
                 base_strength, base_defense, base_speed, current_hp, alignment_score,
                 faction_reputations, active_bounties, aperture, vault, current_region_id, updated_at
             ) VALUES (
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             )
             ON CONFLICT(id) DO UPDATE SET
                 name=excluded.name,
@@ -233,8 +310,6 @@ class CultivatorState:
                 max_stamina=excluded.max_stamina,
                 last_stamina_update=excluded.last_stamina_update,
                 essence_type=excluded.essence_type,
-                spirit_stones=excluded.spirit_stones,
-                primeval_stones=excluded.primeval_stones,
                 player_pos_x=excluded.player_pos_x,
                 player_pos_y=excluded.player_pos_y,
                 base_strength=excluded.base_strength,
@@ -251,7 +326,7 @@ class CultivatorState:
             """, (
                 self.character_id, self.name, self.rank, self.stage, self.aperture_grade, self.aptitude_percentage, self.aperture_status,
                 self.primeval_essence, self.max_essence, self.nourish_progress, self.stamina, self.max_stamina,
-                self.last_stamina_update, self.essence_type, self.spirit_stones, self.spirit_stones, self.player_pos[0], self.player_pos[1],
+                self.last_stamina_update, self.essence_type, self.player_pos[0], self.player_pos[1],
                 self.base_strength, self.base_defense, self.base_speed, self.current_hp, self.alignment_score,
                 json.dumps(self.faction_reputations), json.dumps(self.active_bounties),
                 json.dumps(self.aperture), json.dumps(self.vault), self.current_region_id, now
@@ -290,7 +365,6 @@ class CultivatorState:
             self.max_stamina = float(row["max_stamina"])
             self.last_stamina_update = float(row["last_stamina_update"])
             self.essence_type = row["essence_type"]
-            self.spirit_stones = int(row["spirit_stones"])
             self.player_pos = [int(row["player_pos_x"]), int(row["player_pos_y"])]
             self.base_strength = int(row["base_strength"])
             self.base_defense = int(row["base_defense"])
@@ -306,6 +380,19 @@ class CultivatorState:
             else:
                 self.current_region_id = "southern_border_gu_yue"
             
+            # Legacy DB migration: only inject legacy stones if vault is completely empty
+            if len(self.vault) == 0 and ("primeval_stones" in row.keys() or "spirit_stones" in row.keys()):
+                legacy_stones = row["primeval_stones"] if "primeval_stones" in row.keys() and row["primeval_stones"] is not None else (row["spirit_stones"] if "spirit_stones" in row.keys() and row["spirit_stones"] is not None else 0)
+                if legacy_stones > 0:
+                    self.vault.insert(0, {
+                        "item_id": "primeval_stone",
+                        "id": "primeval_stone",
+                        "name": "Primeval Stone",
+                        "quantity": int(legacy_stones),
+                        "type": "material",
+                        "description": "Standard currency and essence recovery medium of the Gu World."
+                    })
+
             # Ensure all Gu have satiety and hunger initialized
             for gu in self.aperture:
                 if "satiety" not in gu:
@@ -313,10 +400,11 @@ class CultivatorState:
                 if "hunger" not in gu:
                     gu["hunger"] = gu["satiety"]
             for gu in self.vault:
-                if "satiety" not in gu:
-                    gu["satiety"] = gu.get("hunger", 100)
-                if "hunger" not in gu:
-                    gu["hunger"] = gu["satiety"]
+                if gu.get("type") != "material":
+                    if "satiety" not in gu:
+                        gu["satiety"] = gu.get("hunger", 100)
+                    if "hunger" not in gu:
+                        gu["hunger"] = gu["satiety"]
             
             # Immediately calculate retroactive stamina for time offline
             self.update_stamina_passive()
@@ -1418,29 +1506,39 @@ class CultivatorState:
             "cultivator": self.get_stats()
         }
 
-    def consume_primeval_stones(self, amount: int = 1) -> Dict[str, Any]:
+    def consume_primeval_stones(self, quantity: int = 1) -> Dict[str, Any]:
         """
-        The Thermodynamics of Primeval Stones:
-        Instantly restores 5% of Max Primeval Essence per stone consumed.
-        Completely bypasses stamina drain of meditation.
+        The Thermodynamics of Primeval Stones (Vault Item Ledger):
+        Accepts quantity of stones to consume from Vault.
+        Instantly restores (quantity * max_essence * 0.05) Primeval Essence.
+        Bypasses stamina drain and updates Vault JSON ledger atomically.
         """
-        if amount <= 0:
+        if quantity <= 0:
             return {
                 "success": False,
                 "message": "Must consume at least 1 Primeval Stone."
             }
             
-        if self.spirit_stones < amount:
+        stone_item = next((item for item in self.vault if item.get("item_id") == "primeval_stone" or item.get("id") == "primeval_stone"), None)
+        if not stone_item:
             return {
                 "success": False,
-                "message": f"Insufficient Primeval Stones! Required: {amount}, Available: {self.spirit_stones}."
+                "message": "Insufficient Primeval Stones! Primeval Stone item not found in Vault."
             }
             
-        self.spirit_stones -= amount
+        current_qty = int(stone_item.get("quantity", 0))
+        if current_qty < quantity:
+            return {
+                "success": False,
+                "message": f"Insufficient Primeval Stones in Vault! Required: {quantity}, Available: {current_qty}."
+            }
+            
+        # Deduct from vault item stack
+        stone_item["quantity"] = current_qty - quantity
         
         # Restore 5% of max essence per stone
         essence_per_stone = self.max_essence * 0.05
-        total_recovery = amount * essence_per_stone
+        total_recovery = quantity * essence_per_stone
         old_essence = self.primeval_essence
         self.primeval_essence = min(self.max_essence, round(self.primeval_essence + total_recovery, 2))
         actual_restored = round(self.primeval_essence - old_essence, 2)
@@ -1448,18 +1546,21 @@ class CultivatorState:
         self.save_to_db()
         return {
             "success": True,
-            "stones_consumed": amount,
+            "quantity_consumed": quantity,
+            "stones_consumed": quantity,
             "essence_restored": actual_restored,
             "primeval_essence": self.primeval_essence,
-            "spirit_stones": self.spirit_stones,
-            "primeval_stones": self.spirit_stones,
-            "message": f"💎 Shattered {amount} Primeval Stone(s) into your aperture! Instantly restored +{actual_restored:.1f}% Primeval Essence.",
-            "cultivator": self.get_stats()
+            "vault_stones_remaining": stone_item["quantity"],
+            "spirit_stones": stone_item["quantity"],
+            "primeval_stones": stone_item["quantity"],
+            "message": f"💎 Shattered {quantity} Primeval Stone(s) from Vault into your aperture! Instantly restored +{actual_restored:.1f}% Primeval Essence.",
+            "cultivator": self.get_stats(),
+            "vault": self.vault
         }
 
     def feed_gu_worm(self, gu_id: str, stone_amount: int = 1) -> Dict[str, Any]:
         """
-        Feeds an equipped or vaulted Gu worm with Primeval Stones.
+        Feeds an equipped or vaulted Gu worm with Primeval Stones from Vault item ledger.
         Restores +20 satiety per stone (capped at 100).
         """
         if stone_amount <= 0:
@@ -1476,13 +1577,22 @@ class CultivatorState:
                 "message": f"Gu with ID '{gu_id}' not found in aperture or vault."
             }
             
-        if self.spirit_stones < stone_amount:
+        stone_item = next((item for item in self.vault if item.get("item_id") == "primeval_stone" or item.get("id") == "primeval_stone"), None)
+        if not stone_item:
             return {
                 "success": False,
-                "message": f"Insufficient Primeval Stones! Required: {stone_amount}, Available: {self.spirit_stones}."
+                "message": "Insufficient funds: Primeval Stones item not found in Vault."
             }
             
-        self.spirit_stones -= stone_amount
+        current_qty = int(stone_item.get("quantity", 0))
+        if current_qty < stone_amount:
+            return {
+                "success": False,
+                "message": f"Insufficient funds: Insufficient Primeval Stones in Vault! Required: {stone_amount}, Available: {current_qty}."
+            }
+            
+        # Deduct from vault item stack
+        stone_item["quantity"] = current_qty - stone_amount
         current_satiety = int(gu.get("satiety", gu.get("hunger", 100)))
         satiety_gain = 20 * stone_amount
         new_satiety = min(100, current_satiety + satiety_gain)
@@ -1495,10 +1605,12 @@ class CultivatorState:
             "gu_id": gu_id,
             "gu_name": gu.get("name"),
             "stones_deducted": stone_amount,
+            "vault_stones_remaining": stone_item["quantity"],
             "satiety": new_satiety,
-            "message": f"Fed {stone_amount} Primeval Stone(s) to '{gu.get('name')}'. Satiety restored to {new_satiety}%!",
+            "message": f"Fed {stone_amount} Primeval Stone(s) from Vault to '{gu.get('name')}'. Satiety restored to {new_satiety}%!",
             "gu": gu,
-            "cultivator": self.get_stats()
+            "cultivator": self.get_stats(),
+            "vault": self.vault
         }
 
     def to_dict(self) -> Dict[str, Any]:
