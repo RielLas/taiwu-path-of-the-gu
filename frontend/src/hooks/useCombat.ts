@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { useCultivatorStore } from './useCultivator';
+import { playBladeImpactSound, playCrystalShatterSound, playJadeClinkSound } from './useAudio';
 import type { KillerMove } from '../types/api';
 
 export interface Enemy {
@@ -19,6 +20,13 @@ export interface CombatLog {
   type: 'player_atk' | 'enemy_atk' | 'system' | 'loot';
 }
 
+export interface FloatingDamage {
+  id: string;
+  target: 'player' | 'enemy';
+  text: string;
+  color: 'crimson' | 'jade' | 'gold';
+}
+
 interface CombatStore {
   isActive: boolean;
   playerHp: number;
@@ -28,10 +36,14 @@ interface CombatStore {
   loot: { stones: number; dropped_gu?: any; items?: any[] } | null;
   killerMove: KillerMove | null;
   isProcessing: boolean;
+  isShaking: boolean;
+  floatingDamages: FloatingDamage[];
 
   startCombat: (enemyName: string, enemyHp: number, enemyAtk: number, rewardStones: number, isEnforcer?: boolean) => void;
   executeAction: (actionType: 'strike' | 'gu' | 'killer_move' | 'flee', guId?: string, guName?: string, power?: number, cost?: number) => Promise<void>;
   endCombat: () => void;
+  triggerScreenShake: () => void;
+  addFloatingDamage: (target: 'player' | 'enemy', text: string, color: 'crimson' | 'jade' | 'gold') => void;
 }
 
 const API_BASE = 'http://127.0.0.1:8001/api/v1/world';
@@ -45,6 +57,21 @@ export const useCombatStore = create<CombatStore>((set, get) => ({
   loot: null,
   killerMove: null,
   isProcessing: false,
+  isShaking: false,
+  floatingDamages: [],
+
+  triggerScreenShake: () => {
+    set({ isShaking: true });
+    setTimeout(() => set({ isShaking: false }), 450);
+  },
+
+  addFloatingDamage: (target, text, color) => {
+    const id = `${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+    set(s => ({ floatingDamages: [...s.floatingDamages, { id, target, text, color }] }));
+    setTimeout(() => {
+      set(s => ({ floatingDamages: s.floatingDamages.filter(f => f.id !== id) }));
+    }, 1400);
+  },
 
   startCombat: (enemyName, enemyHp, enemyAtk, rewardStones, isEnforcer = false) => {
     const cultivator = useCultivatorStore.getState().cultivator;
@@ -126,6 +153,8 @@ export const useCombatStore = create<CombatStore>((set, get) => ({
       playerHp: maxHp,
       playerMaxHp: maxHp,
       killerMove: killerMove,
+      isShaking: false,
+      floatingDamages: [],
       enemy: {
         id: isEnforcer ? 'enforcer_tie_001' : `enemy_${Date.now()}`,
         name: enemyName,
@@ -157,6 +186,21 @@ export const useCombatStore = create<CombatStore>((set, get) => ({
     const cultivator = cultivatorStore.cultivator;
     const multiplier = cultivator?.essence_multiplier || 1;
     const actualDrain = cost ? Math.max(0.01, Number((cost / multiplier).toFixed(2))) : 0;
+
+    // Trigger synthetic audio hooks and visual visceral feedback
+    if (actionType === 'killer_move') {
+      playCrystalShatterSound();
+      get().triggerScreenShake();
+    } else if (actionType === 'gu' || actionType === 'strike') {
+      playBladeImpactSound();
+      if (power && power >= 40) {
+        get().triggerScreenShake();
+      }
+    }
+
+    if (actualDrain > 0) {
+      get().addFloatingDamage('player', `-${actualDrain}% Ess`, 'jade');
+    }
 
     // Optimistically update logs
     let actionLog = '';
@@ -195,7 +239,7 @@ export const useCombatStore = create<CombatStore>((set, get) => ({
         }
       } else {
         // --- FALLBACK SIMULATION ---
-        await new Promise(resolve => setTimeout(resolve, 800)); // Artificial network delay
+        await new Promise(resolve => setTimeout(resolve, 600)); // Artificial network delay
         
         let dmgDealt = 0;
         if (actionType === 'strike') {
@@ -239,6 +283,13 @@ export const useCombatStore = create<CombatStore>((set, get) => ({
       }
 
       // 2. Parse Response and Update UI Reactively
+      if (data.damage_dealt > 0) {
+        get().addFloatingDamage('enemy', `-${data.damage_dealt} HP`, actionType === 'killer_move' ? 'gold' : 'crimson');
+      }
+      if (data.damage_taken > 0) {
+        get().addFloatingDamage('player', `-${data.damage_taken} HP`, 'crimson');
+      }
+
       if (data.fled) {
         set(s => ({ 
           logs: [...s.logs, { id: `${logId}_flee`, message: '🏃 You successfully escaped the encounter!', type: 'system' }] 
@@ -264,8 +315,35 @@ export const useCombatStore = create<CombatStore>((set, get) => ({
         }));
       }
 
-      // Check combat resolution
+      // Check combat resolution & Trigger Plunder Engine
       if (data.is_victory) {
+        // Dispatch POST to Plunder Matrix endpoint
+        try {
+          const plunderRes = await fetch('http://127.0.0.1:8001/api/v1/combat/plunder', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              enemy_id: state.enemy.id,
+              is_enforcer: Boolean(state.enemy.is_enforcer),
+              reward_stones: state.enemy.reward_stones
+            })
+          });
+
+          if (plunderRes.ok) {
+            const plunderData = await plunderRes.json();
+            playJadeClinkSound();
+            if (plunderData.cultivator) {
+              useCultivatorStore.setState({ cultivator: plunderData.cultivator });
+            }
+            data.loot = {
+              stones: plunderData.stones || state.enemy.reward_stones || 75,
+              dropped_gu: plunderData.dropped_gu
+            };
+          }
+        } catch (err) {
+          console.debug('Plunder endpoint processed locally', err);
+        }
+
         const victoryLogs: CombatLog[] = [
           { id: `${logId}_vic`, message: `🏆 VICTORY! Slain ${state.enemy?.name || 'Enemy'}.`, type: 'system' }
         ];
@@ -309,6 +387,6 @@ export const useCombatStore = create<CombatStore>((set, get) => ({
   },
 
   endCombat: () => {
-    set({ isActive: false, enemy: null, loot: null });
+    set({ isActive: false, enemy: null, loot: null, floatingDamages: [], isShaking: false });
   }
 }));

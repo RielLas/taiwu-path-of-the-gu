@@ -80,3 +80,40 @@
   box-shadow: 0 8px 25px var(--color-jade-glow);
   transform: translateY(-2px);
 }
+
+/* Combat Screen Shake Animation */
+@keyframes screen-shake {
+  0% { transform: translate(0, 0) rotate(0deg); }
+  15% { transform: translate(-10px, 8px) rotate(-1deg); }
+  30% { transform: translate(10px, -8px) rotate(1deg); }
+  45% { transform: translate(-8px, -6px) rotate(0deg); }
+  60% { transform: translate(8px, 6px) rotate(1deg); }
+  75% { transform: translate(-4px, 2px) rotate(0deg); }
+  100% { transform: translate(0, 0) rotate(0deg); }
+}
+.animate-screen-shake {
+  animation: screen-shake 0.45s cubic-bezier(.36,.07,.19,.97) both;
+}
+
+/* Floating CSS Damage Text Animations */
+@keyframes float-damage-up {
+  0% {
+    opacity: 0;
+    transform: translateY(12px) scale(0.85);
+  }
+  20% {
+    opacity: 1;
+    transform: translateY(0px) scale(1.15);
+  }
+  70% {
+    opacity: 1;
+    transform: translateY(-24px) scale(1.0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-48px) scale(0.9);
+  }
+}
+.animate-damage-float {
+  animation: float-damage-up 1.4s ease-out forwards;
+}

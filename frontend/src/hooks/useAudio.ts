@@ -147,7 +147,116 @@ export function playAscendSound(): void {
   }
 }
 
-export type SoundEffect = 'brush' | 'xuan_paper' | 'jade_clink' | 'ascend';
+/**
+ * Synthesizes a visceral heavy blade impact sound
+ * Used for standard Gu combat strikes and weapon impacts
+ */
+export function playBladeImpactSound(): void {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+
+  try {
+    const now = ctx.currentTime;
+
+    // 1. Low punchy bass transient
+    const osc = ctx.createOscillator();
+    const oscGain = ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(220, now);
+    osc.frequency.exponentialRampToValueAtTime(30, now + 0.18);
+    oscGain.gain.setValueAtTime(0.25, now);
+    oscGain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+    osc.connect(oscGain);
+    oscGain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.18);
+
+    // 2. Metallic blade clang
+    const metal = ctx.createOscillator();
+    const metalGain = ctx.createGain();
+    metal.type = 'triangle';
+    metal.frequency.setValueAtTime(840, now);
+    metal.frequency.exponentialRampToValueAtTime(320, now + 0.12);
+    metalGain.gain.setValueAtTime(0.15, now);
+    metalGain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+    metal.connect(metalGain);
+    metalGain.connect(ctx.destination);
+    metal.start(now);
+    metal.stop(now + 0.12);
+
+    // 3. Slashing friction noise burst
+    const bufferSize = Math.floor(ctx.sampleRate * 0.1);
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.3));
+    }
+    const noise = ctx.createBufferSource();
+    noise.buffer = buffer;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(1200, now);
+    filter.Q.setValueAtTime(3.0, now);
+    const noiseGain = ctx.createGain();
+    noiseGain.gain.setValueAtTime(0.18, now);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+    noise.connect(filter);
+    filter.connect(noiseGain);
+    noiseGain.connect(ctx.destination);
+    noise.start(now);
+  } catch (e) {
+    console.debug('Audio playback suppressed', e);
+  }
+}
+
+/**
+ * Synthesizes a high-impact crystalline shattering sound
+ * Used for Killer Moves, critical hits, and aperture ruptures
+ */
+export function playCrystalShatterSound(): void {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+
+  try {
+    const now = ctx.currentTime;
+
+    // Multi-tonal crystalline shards
+    const freqs = [1850, 2640, 3700, 4950];
+    freqs.forEach((freq, idx) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = idx % 2 === 0 ? 'sine' : 'triangle';
+      osc.frequency.setValueAtTime(freq, now + idx * 0.02);
+      osc.frequency.exponentialRampToValueAtTime(freq * 0.4, now + idx * 0.02 + 0.35);
+
+      gain.gain.setValueAtTime(0.12, now + idx * 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.02 + 0.35);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(now + idx * 0.02);
+      osc.stop(now + idx * 0.02 + 0.35);
+    });
+
+    // Sub-bass shockwave for killer move weight
+    const sub = ctx.createOscillator();
+    const subGain = ctx.createGain();
+    sub.type = 'sine';
+    sub.frequency.setValueAtTime(140, now);
+    sub.frequency.exponentialRampToValueAtTime(25, now + 0.4);
+    subGain.gain.setValueAtTime(0.35, now);
+    subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+    sub.connect(subGain);
+    subGain.connect(ctx.destination);
+    sub.start(now);
+    sub.stop(now + 0.4);
+  } catch (e) {
+    console.debug('Audio playback suppressed', e);
+  }
+}
+
+export type SoundEffect = 'brush' | 'xuan_paper' | 'jade_clink' | 'ascend' | 'blade' | 'shatter';
 
 export function playAudio(sound: SoundEffect): void {
   switch (sound) {
@@ -161,6 +270,12 @@ export function playAudio(sound: SoundEffect): void {
     case 'ascend':
       playAscendSound();
       break;
+    case 'blade':
+      playBladeImpactSound();
+      break;
+    case 'shatter':
+      playCrystalShatterSound();
+      break;
   }
 }
 
@@ -169,6 +284,9 @@ export function useAudio() {
     playBrush: playBrushSound,
     playJadeClink: playJadeClinkSound,
     playAscend: playAscendSound,
+    playBlade: playBladeImpactSound,
+    playShatter: playCrystalShatterSound,
+    unlockAudio: unlockAudioContext,
     playAudio
   };
 }

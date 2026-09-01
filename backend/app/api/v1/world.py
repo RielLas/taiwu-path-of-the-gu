@@ -462,3 +462,14 @@ async def meditate_in_world(payload: Dict[str, Any] = {}):
         raise HTTPException(status_code=400, detail=result.get("message", "Meditation failed."))
     return result
 
+@router.post("/combat/plunder")
+async def world_combat_plunder(payload: Dict[str, Any] = {}):
+    """
+    Plunder Matrix endpoint accessible via /world/combat/plunder
+    """
+    from app.engine.combat import resolve_combat_plunder
+    enemy_id = payload.get("enemy_id")
+    is_enforcer = payload.get("is_enforcer", False)
+    reward_stones = payload.get("reward_stones")
+    return resolve_combat_plunder(enemy_id, is_enforcer, reward_stones)
+
