@@ -79,18 +79,21 @@ export default function TaiwuHUD({ activeTab, setActiveTab }: TaiwuHUDProps) {
           <div className="w-28 h-28 md:w-36 md:h-36 rounded-full border-[3px] border-[#3b4d3c] bg-[#12100d] shadow-2xl flex flex-col items-center justify-center relative overflow-hidden glass-panel">
             {/* Liquid / Wave effect */}
             <div 
-              className="absolute bottom-0 w-full bg-gradient-to-t from-[#3b4d3c] to-emerald-700 opacity-60 transition-all duration-1000 ease-in-out"
-              style={{ height: `${staminaPercent}%` }}
+              className="absolute bottom-0 w-full opacity-70 transition-all duration-1000 ease-in-out"
+              style={{ 
+                height: `${staminaPercent}%`,
+                backgroundColor: cultivator?.essence_color || '#22c55e'
+              }}
             >
               {/* Fake wave top */}
               <div className="absolute top-0 left-0 w-[200%] h-4 bg-white opacity-20 -translate-y-1/2 rounded-[100%] animate-[spin_4s_linear_infinite]"></div>
             </div>
             
             <span className="text-4xl md:text-5xl text-[#d5cfc4] font-serif font-bold drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] z-10">
-              {cultivator?.primeval_essence || 0}
+              {cultivator?.primeval_essence || 0}%
             </span>
-            <span className="text-[9px] text-[#8a8275] uppercase tracking-[0.3em] font-sans mt-1 z-10 drop-shadow-md">
-              Essence
+            <span className="text-[9px] text-[#8a8275] uppercase tracking-[0.2em] font-sans mt-1 z-10 drop-shadow-md">
+              {cultivator?.stage || 'Essence'}
             </span>
           </div>
         </div>

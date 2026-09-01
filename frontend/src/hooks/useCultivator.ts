@@ -27,6 +27,7 @@ interface CultivatorState {
   refineGu: (guAId: string, guBId: string, catalyst?: string) => Promise<RefineGuResponse>;
   captureWildGu: (wildGu: Partial<GuWorm>) => Promise<CaptureGuResponse>;
   ascend: () => Promise<AscendResponse>;
+  nourishAperture: (drainPercentage?: number) => Promise<any>;
   deathPenalty: () => Promise<DeathPenaltyResponse>;
 }
 
@@ -153,6 +154,33 @@ export const useCultivatorStore = create<CultivatorState>((set, get) => ({
         set({ cultivator: data.cultivator });
       }
       // Re-fetch entire aperture and stats
+      await get().fetchAperture();
+      set({ isLoading: false });
+      return data;
+    } catch (err: any) {
+      set({ error: err.message || 'An error occurred', isLoading: false });
+      throw err;
+    }
+  },
+
+  nourishAperture: async (drainPercentage: number = 30.0) => {
+    set({ isLoading: true, error: null });
+    try {
+      const response = await fetch(`${API_BASE}/nourish`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ drain_percentage: drainPercentage }),
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.detail || 'Failed to nourish aperture');
+      }
+
+      const data = await response.json();
+      if (data.cultivator) {
+        set({ cultivator: data.cultivator });
+      }
       await get().fetchAperture();
       set({ isLoading: false });
       return data;

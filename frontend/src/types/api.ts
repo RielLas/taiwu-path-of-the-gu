@@ -87,6 +87,10 @@ export interface CultivatorStats {
   aperture_status: 'Pristine' | 'Fractured' | string;
   primeval_essence: number;
   max_essence: number;
+  aptitude_percentage?: number;
+  nourish_progress?: number;
+  essence_multiplier?: number;
+  essence_color?: string;
   essence_type: string;
   spirit_stones: number;
   location: [number, number];
@@ -102,6 +106,16 @@ export interface CultivatorStats {
   cultivation_core?: CultivationCore;
   karmic_ledger?: KarmicLedger;
   killer_move?: KillerMove | null;
+}
+
+export interface NourishResponse {
+  success: boolean;
+  stage_promoted?: boolean;
+  message: string;
+  stage: string;
+  nourish_progress: number;
+  essence_multiplier: number;
+  cultivator: CultivatorStats;
 }
 
 export interface GetApertureResponse {

@@ -170,22 +170,32 @@ export default function CombatArena() {
             </div>
 
             <div className="shrink-0 flex flex-col items-center">
-              <button
-                onClick={() => executeAction('killer_move', killerMove.id, killerMove.name, killerMove.damage, killerMove.essence_cost)}
-                disabled={isProcessing || currentEssence < killerMove.essence_cost}
-                className={`py-3.5 px-6 md:px-8 rounded-xl font-sans text-xs md:text-sm font-bold uppercase tracking-[0.2em] transition-all duration-300 shadow-2xl border ${
-                  currentEssence >= killerMove.essence_cost && !isProcessing
-                    ? 'bg-gradient-to-r from-red-600 via-amber-600 to-red-800 text-white hover:brightness-125 hover:shadow-[0_0_30px_rgba(239,68,68,0.8)] border-[#c89b3c] cursor-pointer hover:scale-105 active:scale-95'
-                    : 'bg-[#1a1814] text-zinc-600 border-[#2a2620] cursor-not-allowed opacity-50'
-                }`}
-              >
-                ⚡ EXECUTE KILLER MOVE ({killerMove.damage} DMG • {killerMove.essence_cost}% Ess)
-              </button>
-              {currentEssence < killerMove.essence_cost && (
-                <span className="text-[10px] text-red-400 font-sans mt-1 text-center">
-                  Requires {killerMove.essence_cost}% Essence (Have {currentEssence}%)
-                </span>
-              )}
+              {(() => {
+                const multiplier = cultivator?.essence_multiplier || 1;
+                const killerDrain = Math.max(0.01, Number((killerMove.essence_cost / multiplier).toFixed(2)));
+                const canAffordKiller = currentEssence >= killerDrain;
+
+                return (
+                  <>
+                    <button
+                      onClick={() => executeAction('killer_move', killerMove.id, killerMove.name, killerMove.damage, killerMove.essence_cost)}
+                      disabled={isProcessing || !canAffordKiller}
+                      className={`py-3.5 px-6 md:px-8 rounded-xl font-sans text-xs md:text-sm font-bold uppercase tracking-[0.2em] transition-all duration-300 shadow-2xl border ${
+                        canAffordKiller && !isProcessing
+                          ? 'bg-gradient-to-r from-red-600 via-amber-600 to-red-800 text-white hover:brightness-125 hover:shadow-[0_0_30px_rgba(239,68,68,0.8)] border-[#c89b3c] cursor-pointer hover:scale-105 active:scale-95'
+                          : 'bg-[#1a1814] text-zinc-600 border-[#2a2620] cursor-not-allowed opacity-50'
+                      }`}
+                    >
+                      ⚡ EXECUTE KILLER MOVE ({killerMove.damage} DMG • {killerDrain}% Ess)
+                    </button>
+                    {!canAffordKiller && (
+                      <span className="text-[10px] text-red-400 font-sans mt-1 text-center">
+                        Requires {killerDrain}% Essence ({killerMove.essence_cost} BEU)
+                      </span>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           </div>
         )}
@@ -241,7 +251,9 @@ export default function CombatArena() {
 
             {/* Active Gu Actions */}
             {activeGuWorms.map(gu => {
-              const canAfford = currentEssence >= gu.essence_cost;
+              const multiplier = cultivator?.essence_multiplier || 1;
+              const actualCost = Math.max(0.01, Number((gu.essence_cost / multiplier).toFixed(2)));
+              const canAfford = currentEssence >= actualCost;
               return (
                 <button 
                   key={gu.id}
@@ -257,13 +269,12 @@ export default function CombatArena() {
                     {gu.name}
                   </span>
                   <span className={`text-[10px] font-sans uppercase z-10 ${canAfford ? 'text-[#c89b3c]' : 'text-[#5c2424]'}`}>
-                    Cost: {gu.essence_cost}% Ess
+                    Cost: {actualCost}% Ess ({gu.essence_cost} BEU)
                   </span>
                   
                   {/* Power Tooltip Overlay */}
                   <div className="absolute inset-0 bg-[#0a0907]/90 backdrop-blur opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center transition-opacity z-20 font-sans text-xs">
                     <span className="text-red-400 font-bold">{gu.active_power} DMG</span>
-                    {/* Add flavor description if needed */}
                   </div>
                 </button>
               );

@@ -151,12 +151,17 @@ export const useCombatStore = create<CombatStore>((set, get) => ({
     set({ isProcessing: true });
     const logId = Date.now();
 
+    const cultivatorStore = useCultivatorStore.getState();
+    const cultivator = cultivatorStore.cultivator;
+    const multiplier = cultivator?.essence_multiplier || 1;
+    const actualDrain = cost ? Math.max(0.01, Number((cost / multiplier).toFixed(2))) : 0;
+
     // Optimistically update logs
     let actionLog = '';
     if (actionType === 'flee') actionLog = 'You attempt to flee the battlefield...';
     else if (actionType === 'strike') actionLog = 'You launch a basic martial strike!';
-    else if (actionType === 'killer_move') actionLog = `⚡ UNLEASHED SUPREME KILLER MOVE [${guName}], consuming ${cost}% essence!`;
-    else actionLog = `You activate ${guName}, consuming ${cost}% essence!`;
+    else if (actionType === 'killer_move') actionLog = `⚡ UNLEASHED SUPREME KILLER MOVE [${guName}], consuming ${actualDrain}% essence (${cost} BEU)!`;
+    else actionLog = `You activate ${guName}, consuming ${actualDrain}% essence (${cost} BEU)!`;
 
     set(s => ({ logs: [...s.logs, { id: `${logId}_1`, message: actionLog, type: 'player_atk' }] }));
 
@@ -173,7 +178,8 @@ export const useCombatStore = create<CombatStore>((set, get) => ({
           enemy_hp: state.enemy.hp,
           enemy_atk: state.enemy.atk,
           reward_stones: state.enemy.reward_stones,
-          player_hp: state.playerHp
+          player_hp: state.playerHp,
+          actual_drain: actualDrain
         })
       });
 
@@ -187,24 +193,21 @@ export const useCombatStore = create<CombatStore>((set, get) => ({
         // --- FALLBACK SIMULATION ---
         await new Promise(resolve => setTimeout(resolve, 800)); // Artificial network delay
         
-        const cultivatorStore = useCultivatorStore.getState();
-        const cultivator = cultivatorStore.cultivator;
-        
         let dmgDealt = 0;
         if (actionType === 'strike') {
           dmgDealt = Math.max(1, (cultivator?.stats.strength.total || 10) - (state.enemy.rank * 5));
-        } else if (actionType === 'gu' && power && cost) {
+        } else if (actionType === 'gu' && power) {
           dmgDealt = power;
           if (cultivator) {
              useCultivatorStore.setState({ 
-               cultivator: { ...cultivator, primeval_essence: Math.max(0, cultivator.primeval_essence - cost) }
+               cultivator: { ...cultivator, primeval_essence: Math.max(0, Number((cultivator.primeval_essence - actualDrain).toFixed(2))) }
              });
           }
-        } else if (actionType === 'killer_move' && power && cost) {
+        } else if (actionType === 'killer_move' && power) {
           dmgDealt = power;
           if (cultivator) {
              useCultivatorStore.setState({ 
-               cultivator: { ...cultivator, primeval_essence: Math.max(0, cultivator.primeval_essence - cost) }
+               cultivator: { ...cultivator, primeval_essence: Math.max(0, Number((cultivator.primeval_essence - actualDrain).toFixed(2))) }
              });
           }
         }

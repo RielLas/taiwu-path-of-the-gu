@@ -7,8 +7,10 @@ interface ApertureModalProps {
 }
 
 export default function ApertureModal({ onClose }: ApertureModalProps) {
-  const { cultivator, guWorms, isLoading, fetchAperture, feedGu } = useCultivatorStore();
-  const [subTab, setSubTab] = useState<'vault' | 'overview'>('vault');
+  const { cultivator, guWorms, isLoading, fetchAperture, feedGu, nourishAperture } = useCultivatorStore();
+  const [subTab, setSubTab] = useState<'vault' | 'nourish' | 'overview'>('vault');
+  const [isNourishing, setIsNourishing] = useState(false);
+  const [nourishAlert, setNourishAlert] = useState<string | null>(null);
 
   useEffect(() => {
     // Ensure we fetch the latest state if not already loaded
@@ -26,6 +28,22 @@ export default function ApertureModal({ onClose }: ApertureModalProps) {
   }
 
   const isFractured = cultivator?.aperture_status === 'Fractured';
+  const isPeakStage = cultivator?.stage?.toLowerCase().includes('peak');
+  const essenceColor = cultivator?.essence_color || '#22c55e';
+  const canNourish = (cultivator?.primeval_essence || 0) >= 30 && !isPeakStage;
+
+  const handleNourish = async () => {
+    setIsNourishing(true);
+    setNourishAlert(null);
+    try {
+      const res = await nourishAperture(30.0);
+      setNourishAlert(res.message || '✨ Aperture crystal walls washed with primeval essence!');
+    } catch (err: any) {
+      setNourishAlert(`💀 Nourishment failed: ${err.message}`);
+    } finally {
+      setIsNourishing(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 w-screen h-screen bg-[#12100d]/95 backdrop-blur-2xl z-50 pt-8 pb-16 px-4 md:px-8 overflow-y-auto font-serif flex flex-col items-center select-none">
@@ -44,45 +62,53 @@ export default function ApertureModal({ onClose }: ApertureModalProps) {
 
       {/* Header & Cultivator Physique Summary */}
       <div className="w-full max-w-5xl mb-6 text-center relative animate-fade-in">
-        <h1 className="text-4xl md:text-5xl text-[#3b4d3c] mb-2 tracking-[0.15em] font-light drop-shadow-[0_0_20px_rgba(59,77,60,0.6)]">
+        <h1 className="text-4xl md:text-5xl text-[#d5cfc4] mb-2 tracking-[0.15em] font-light drop-shadow-[0_0_20px_rgba(200,155,60,0.4)]">
           Primeval Aperture & Vault
         </h1>
-        <div className="w-64 h-0.5 bg-gradient-to-r from-transparent via-[#3b4d3c] to-transparent mx-auto mb-3"></div>
+        <div className="w-64 h-0.5 bg-gradient-to-r from-transparent via-[#c89b3c] to-transparent mx-auto mb-3"></div>
         <p className="text-[#8a8275] font-sans text-xs tracking-wide max-w-2xl mx-auto">
-          The sacred inner realm where your Gu reside. Manage your 3 active combat techniques, nourish passive Gu into your mortal sinews, and store inactive Gu in your vault.
+          The sacred inner realm where your Gu reside. Manage active combat loadouts, wash the aperture walls to condense essence purity, and store inactive Gu.
         </p>
 
         {/* Cultivator Body Stat Ribbon */}
         {cultivator && (
-          <div className="mt-5 p-4 rounded-xl bg-black/60 border border-[#2a2620] flex flex-wrap items-center justify-around gap-4 font-sans text-xs shadow-lg max-w-3xl mx-auto">
+          <div className="mt-5 p-4 rounded-xl bg-black/60 border border-[#2a2620] flex flex-wrap items-center justify-around gap-4 font-sans text-xs shadow-lg max-w-4xl mx-auto">
             <div>
               <span className="text-[#8a8275] block text-[10px] uppercase tracking-wider">Cultivator</span>
-              <span className="text-[#d5cfc4] font-bold text-sm">{cultivator.name} (Rank {cultivator.rank} • {cultivator.stage})</span>
+              <span className="text-[#d5cfc4] font-bold text-sm">{cultivator.name} (R{cultivator.rank} • {cultivator.stage})</span>
             </div>
             <div>
               <span className="text-[#8a8275] block text-[10px] uppercase tracking-wider">Aperture Status</span>
-              <span className={`font-bold text-sm ${isFractured ? 'text-[#c0392b]' : 'text-[#3b4d3c]'}`}>
+              <span className={`font-bold text-sm ${isFractured ? 'text-[#c0392b]' : 'text-emerald-400'}`}>
                 {isFractured ? '💀 Fractured (-5% Cap)' : '✨ Pristine (100%)'}
               </span>
             </div>
             <div>
               <span className="text-[#8a8275] block text-[10px] uppercase tracking-wider">Primeval Sea</span>
-              <span className="text-[#3b4d3c] font-bold text-sm">{cultivator.primeval_essence}/{cultivator.max_essence}%</span>
+              <span className="font-bold text-sm" style={{ color: essenceColor }}>
+                {cultivator.primeval_essence}% / {cultivator.max_essence}%
+              </span>
+            </div>
+            <div>
+              <span className="text-[#8a8275] block text-[10px] uppercase tracking-wider">Purity Multiplier</span>
+              <span className="text-[#c89b3c] font-bold text-sm">
+                ⚡ {cultivator.essence_multiplier || 1}x Purity
+              </span>
             </div>
             <div>
               <span className="text-[#8a8275] block text-[10px] uppercase tracking-wider">Physical Strength</span>
               <span className="text-[#d5cfc4] font-bold text-sm">
                 {cultivator.stats.strength.total} 
-                <span className="text-[#3b4d3c] text-[11px] ml-1 font-normal">
+                <span className="text-[#c89b3c] text-[11px] ml-1 font-normal">
                   ({cultivator.stats.strength.modifiers.length > 0 ? cultivator.stats.strength.modifiers.join(' + ') : 'Mortal'})
                 </span>
               </span>
             </div>
             <div>
-              <span className="text-[#8a8275] block text-[10px] uppercase tracking-wider">Body Tempering</span>
+              <span className="text-[#8a8275] block text-[10px] uppercase tracking-wider">Body Armor</span>
               <span className="text-[#d5cfc4] font-bold text-sm">
                 {cultivator.stats.defense.total}
-                <span className="text-[#3b4d3c] text-[11px] ml-1 font-normal">
+                <span className="text-emerald-400 text-[11px] ml-1 font-normal">
                   ({cultivator.stats.defense.modifiers.length > 0 ? cultivator.stats.defense.modifiers.join(' + ') : 'Flesh'})
                 </span>
               </span>
@@ -103,10 +129,20 @@ export default function ApertureModal({ onClose }: ApertureModalProps) {
             🏺 Gu Vault & Loadout (Max 3 Combat)
           </button>
           <button
+            onClick={() => setSubTab('nourish')}
+            className={`px-5 py-2 rounded-xl text-xs font-sans font-bold uppercase tracking-wider transition-all border cursor-pointer ${
+              subTab === 'nourish'
+                ? 'bg-[#c89b3c]/30 border-[#c89b3c] text-[#d5cfc4] shadow-[0_0_15px_rgba(200,155,60,0.2)]'
+                : 'bg-black/40 border-[#2a2620] text-[#8a8275] hover:text-[#d5cfc4]'
+            }`}
+          >
+            🌊 Aperture Nourishment (温养空窍)
+          </button>
+          <button
             onClick={() => setSubTab('overview')}
             className={`px-5 py-2 rounded-xl text-xs font-sans font-bold uppercase tracking-wider transition-all border cursor-pointer ${
               subTab === 'overview'
-                ? 'bg-[#c89b3c]/30 border-[#c89b3c] text-[#d5cfc4] shadow-[0_0_15px_rgba(200,155,60,0.2)]'
+                ? 'bg-sky-950/40 border-sky-700/60 text-[#d5cfc4] shadow-[0_0_15px_rgba(56,189,248,0.2)]'
                 : 'bg-black/40 border-[#2a2620] text-[#8a8275] hover:text-[#d5cfc4]'
             }`}
           >
@@ -118,6 +154,121 @@ export default function ApertureModal({ onClose }: ApertureModalProps) {
       {/* Main Content Area: Subtab View */}
       {subTab === 'vault' ? (
         <GuVault />
+      ) : subTab === 'nourish' && cultivator ? (
+        /* The Nourishment Loop & Purity Matrix View */
+        <div className="max-w-4xl mx-auto w-full space-y-6 animate-slide-up font-sans">
+          
+          {/* Primeval Sea Chamber Card */}
+          <div className="glass-card bg-[#12100d]/90 border border-[#2a2620] p-6 rounded-2xl shadow-2xl space-y-5">
+            
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2 border-b border-[#2a2620] pb-4">
+              <div>
+                <h2 className="text-xl font-bold font-serif text-[#d5cfc4] tracking-wider uppercase">
+                  Primeval Sea & Crystal Walls (灵海窍壁)
+                </h2>
+                <span className="text-xs text-[#8a8275]">
+                  {cultivator.essence_type}
+                </span>
+              </div>
+              
+              <span className="text-xs font-mono font-bold px-3 py-1 bg-[#241a12] border border-[#c89b3c]/60 text-[#c89b3c] rounded-full">
+                ⚡ {cultivator.essence_multiplier || 1}x Purity Multiplier
+              </span>
+            </div>
+
+            {/* Dynamic Primeval Sea Gauge */}
+            <div className="space-y-2">
+              <div className="flex justify-between text-xs font-semibold">
+                <span className="text-[#8a8275] uppercase tracking-wider">
+                  Primeval Sea Volume (Strict Aptitude Cap: {cultivator.aptitude_percentage || 93}%)
+                </span>
+                <span style={{ color: essenceColor }} className="font-mono text-sm">
+                  {cultivator.primeval_essence}% / {cultivator.max_essence}%
+                </span>
+              </div>
+
+              <div className="w-full h-5 bg-[#0a0907] rounded-full border border-[#2a2620] overflow-hidden p-0.5 shadow-inner">
+                <div 
+                  className="h-full rounded-full transition-all duration-700 shadow-[0_0_15px_rgba(200,155,60,0.4)] relative"
+                  style={{ 
+                    width: `${Math.min(100, (cultivator.primeval_essence / (cultivator.max_essence || 1)) * 100)}%`,
+                    backgroundColor: essenceColor
+                  }}
+                >
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-pulse pointer-events-none"></div>
+                </div>
+              </div>
+            </div>
+
+            {/* Micro-Progression & Wall Washing Section */}
+            <div className="bg-[#171410] border border-[#2a2620] p-5 rounded-xl space-y-4">
+              <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2">
+                <div>
+                  <span className="text-xs uppercase tracking-widest text-[#c89b3c] font-bold block">
+                    Micro-Stage Tempering Progress
+                  </span>
+                  <span className="text-sm font-bold text-[#d5cfc4]">
+                    Current Realm: Rank {cultivator.rank} • {cultivator.stage}
+                  </span>
+                </div>
+
+                <span className="text-xs font-mono font-bold text-amber-300">
+                  {cultivator.nourish_progress || 0}% / 100%
+                </span>
+              </div>
+
+              {/* Progress Bar towards next stage */}
+              <div className="w-full h-3 bg-[#0a0907] rounded-full border border-[#2a2620] overflow-hidden">
+                <div 
+                  className="h-full bg-gradient-to-r from-amber-700 to-amber-400 transition-all duration-500 rounded-full"
+                  style={{ width: `${Math.min(100, cultivator.nourish_progress || 0)}%` }}
+                />
+              </div>
+
+              {/* Alert Notification */}
+              {nourishAlert && (
+                <div className={`p-3 rounded-lg border text-xs font-semibold ${
+                  nourishAlert.includes('failed') ? 'bg-red-950/40 border-red-800 text-red-300' : 'bg-emerald-950/40 border-emerald-700 text-emerald-300'
+                }`}>
+                  {nourishAlert}
+                </div>
+              )}
+
+              {/* Action Trigger */}
+              <div className="pt-2">
+                {isPeakStage ? (
+                  <div className="p-3 bg-amber-950/30 border border-amber-600/60 rounded-xl text-center space-y-1">
+                    <span className="text-xs font-bold text-amber-300 block">
+                      ⚡ PEAK BOTTLENECK REACHED
+                    </span>
+                    <p className="text-[11px] text-[#8a8275]">
+                      The crystal aperture wall has reached its mortal limit for this Rank. Enter Closed Door Cultivation to Shatter the Aperture Wall.
+                    </p>
+                  </div>
+                ) : (
+                  <button
+                    onClick={handleNourish}
+                    disabled={!canNourish || isNourishing}
+                    className={`w-full py-3 px-4 rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
+                      canNourish 
+                        ? 'bg-gradient-to-r from-[#8B6914] to-[#c89b3c] hover:brightness-110 text-[#12100d] shadow-lg cursor-pointer' 
+                        : 'bg-zinc-800 text-zinc-500 border border-zinc-700 cursor-not-allowed'
+                    }`}
+                  >
+                    {isNourishing ? '🌊 Washing Aperture Walls...' : '🌊 Wash Aperture Walls (Drain 30% Primeval Sea)'}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Canonical Lore Banner */}
+            <div className="p-3.5 bg-[#0a0907] border border-[#2a2620] rounded-xl text-xs text-[#8a8275] leading-relaxed">
+              💡 <strong className="text-[#d5cfc4]">Reverend Insanity Canonical Rules:</strong> A cultivator's Primeval Sea volume is permanently capped by their innate aptitude percentage (Grade A = 93%). Advancing micro-stages (Initial 1x → Middle 2x → Upper 4x → Peak 8x) condenses primeval essence purity, reducing the actual percentage drain for all Gu techniques and killer moves.
+            </div>
+
+          </div>
+
+        </div>
       ) : (
         /* Gu Cards Grid */
         <div className="max-w-6xl mx-auto w-full">

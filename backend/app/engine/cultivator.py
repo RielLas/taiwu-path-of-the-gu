@@ -12,12 +12,14 @@ class CultivatorState:
     def __init__(self):
         self.name: str = "Fang Yuan"
         self.rank: int = 1
-        self.stage: str = "Peak Stage"
+        self.stage: str = "Initial Stage"
         self.aperture_grade: str = "A Grade (93% Primeval Sea)"
+        self.aptitude_percentage: float = 93.0
         self.aperture_status: str = "Pristine"  # "Pristine" or "Fractured"
-        self.primeval_essence: int = 93
-        self.max_essence: int = 93
-        self.essence_type: str = "Dark Green Copper Primeval Essence"
+        self.primeval_essence: float = 93.0
+        self.max_essence: float = 93.0
+        self.nourish_progress: float = 0.0
+        self.essence_type: str = "Rank 1 Initial Green Copper Primeval Essence"
         self.spirit_stones: int = 65
         self.player_pos: List[int] = [7, 7]  # [x, y]
         self.current_node: dict = None  # tracks the current explorable node
@@ -203,12 +205,9 @@ class CultivatorState:
                     elif stat == "defense":
                         total_defense += val
                         defense_modifiers.append(label)
-                    elif stat == "max_essence":
-                        bonus_essence += val
-
-        max_essence = self.max_essence + bonus_essence
-        # Clamp current essence to max
-        current_essence = min(self.primeval_essence, max_essence)
+        # Strict Volume Percentage: Absolute volume is strictly capped by innate aptitude percentage (e.g. 93.0%)
+        max_essence = self.aptitude_percentage
+        current_essence = min(round(self.primeval_essence, 2), max_essence)
         max_hp = total_defense * 10
 
         # Body Tempering Records (from passive Gu)
@@ -320,7 +319,11 @@ class CultivatorState:
             "aperture_status": self.aperture_status,
             "primeval_essence": current_essence,
             "max_essence": max_essence,
-            "essence_type": self.essence_type,
+            "aptitude_percentage": self.aptitude_percentage,
+            "nourish_progress": self.nourish_progress,
+            "essence_multiplier": self.get_essence_multiplier(),
+            "essence_color": self.get_essence_color(),
+            "essence_type": self.get_essence_type(),
             "spirit_stones": self.spirit_stones,
             "location": self.player_pos,
             "hp": self.current_hp,
@@ -506,20 +509,11 @@ class CultivatorState:
             old_rank = self.rank
             self.rank += 1
             self.stage = "Initial Stage"
+            self.nourish_progress = 0.0
+            self.essence_type = self.get_essence_type()
             
-            # Upgrade essence type by Rank
-            ESSENCE_TYPES = {
-                1: "Dark Green Copper Primeval Essence",
-                2: "Pale Red Iron Primeval Essence",
-                3: "Light Silver Primeval Essence",
-                4: "Bright Gold Primeval Essence",
-                5: "Purple Crystal Primeval Essence",
-                6: "Immortal Green Grape Essence"
-            }
-            self.essence_type = ESSENCE_TYPES.get(self.rank, f"Rank {self.rank} Primeval Essence")
-            
-            # Expand primeval sea capacity and fully replenish essence
-            self.max_essence = int(self.max_essence * 1.25) + 10
+            # Strict Volume Limit: Always strictly bounded by innate aptitude (e.g. 93.0%)
+            self.max_essence = self.aptitude_percentage
             self.primeval_essence = self.max_essence
             
             # Mortal physique tempering from breakthrough
@@ -530,7 +524,7 @@ class CultivatorState:
             return {
                 "success": True,
                 "wall_broken": True,
-                "message": f"✨ BREAKTHROUGH ACCOMPLISHED! The crystal wall shattered under your ferocious essence battering! You have ascended to Rank {self.rank} ({self.stage}) with {self.essence_type}!",
+                "message": f"✨ BREAKTHROUGH ACCOMPLISHED! The crystal wall shattered under your ferocious essence battering! You have ascended to Rank {self.rank} ({self.stage}) with {self.essence_type} (Purity Multiplier: {self.get_essence_multiplier()}x)!",
                 "cultivator": self.get_stats()
             }
         else:
@@ -539,14 +533,14 @@ class CultivatorState:
             fracture_roll = random.random()
             if fracture_roll <= 0.15:
                 self.aperture_status = "Fractured"
-                lost_cap = max(1, int(self.max_essence * 0.05))
-                self.max_essence = max(10, self.max_essence - lost_cap)
+                self.aptitude_percentage = max(10.0, round(self.aptitude_percentage - 5.0, 1))
+                self.max_essence = self.aptitude_percentage
                 self.primeval_essence = min(self.primeval_essence, self.max_essence)
                 return {
                     "success": False,
                     "wall_broken": False,
                     "fractured": True,
-                    "message": f"💀 SEVERE BACKLASH! The aperture crystal wall resisted your essence onslaught. A hairline fracture cracked across your aperture wall! Max Essence permanently reduced by 5% (-{lost_cap}%). Status: FRACTURED.",
+                    "message": f"💀 SEVERE BACKLASH! The aperture crystal wall resisted your essence onslaught. A hairline fracture cracked across your aperture wall! Aptitude capacity permanently reduced by -5% (Now {self.aptitude_percentage}%). Status: FRACTURED.",
                     "cultivator": self.get_stats()
                 }
             else:
@@ -907,6 +901,146 @@ class CultivatorState:
             "gu": added_gu,
             "spirit_stones": self.spirit_stones,
             "new_reputation": new_rep,
+            "cultivator": self.get_stats()
+        }
+
+    def get_stage_multiplier(self) -> float:
+        st = self.stage.lower()
+        if "peak" in st:
+            return 8.0
+        elif "upper" in st:
+            return 4.0
+        elif "middle" in st:
+            return 2.0
+        else:
+            return 1.0
+
+    def get_rank_multiplier(self) -> float:
+        return 10.0 ** max(0, self.rank - 1)
+
+    def get_essence_multiplier(self) -> float:
+        """
+        Canonical Reverend Insanity Purity Multiplier Matrix:
+        Micro-stages: Initial (1x), Middle (2x), Upper (4x), Peak (8x)
+        Macro-stages (Ranks): Rank 1 (1x), Rank 2 (10x), Rank 3 (100x), Rank 4 (1000x), Rank 5 (10000x)
+        """
+        return self.get_rank_multiplier() * self.get_stage_multiplier()
+
+    def calculate_essence_drain(self, beu_cost: float) -> float:
+        """
+        Actual % Drain = Gu BEU Cost / get_essence_multiplier()
+        """
+        multiplier = self.get_essence_multiplier()
+        return max(0.01, round(beu_cost / multiplier, 3))
+
+    def get_essence_type(self) -> str:
+        STAGE_MAP = {
+            "initial stage": "Initial",
+            "middle stage": "Middle",
+            "upper stage": "Upper",
+            "peak stage": "Peak"
+        }
+        st_label = "Initial"
+        for k, v in STAGE_MAP.items():
+            if v.lower() in self.stage.lower():
+                st_label = v
+                break
+        
+        RANK_TYPES = {
+            1: f"Rank 1 {st_label} Green Copper Primeval Essence",
+            2: f"Rank 2 {st_label} Red Iron Primeval Essence",
+            3: f"Rank 3 {st_label} Silver Primeval Essence",
+            4: f"Rank 4 {st_label} Gold Primeval Essence",
+            5: f"Rank 5 {st_label} Purple Crystal Primeval Essence"
+        }
+        return RANK_TYPES.get(self.rank, f"Rank {self.rank} {st_label} Primeval Essence")
+
+    def get_essence_color(self) -> str:
+        """
+        Hex color code representing the primeval essence sea based on Rank and Stage purity.
+        """
+        st = self.stage.lower()
+        if self.rank == 1:
+            if "peak" in st: return "#065f46" # Deep Green Copper
+            if "upper" in st: return "#15803d" # Dark Green Copper
+            if "middle" in st: return "#22c55e" # Green Copper
+            return "#86efac" # Pale Green Copper
+        elif self.rank == 2:
+            if "peak" in st: return "#991b1b" # Purified Silver-Red Charcoal
+            if "upper" in st: return "#b91c1c" # Deep Crimson Charcoal
+            if "middle" in st: return "#ef4444" # Scarlet Red Iron
+            return "#fca5a5" # Pale Red Iron
+        elif self.rank == 3:
+            if "peak" in st: return "#e2e8f0" # Snow Silver
+            return "#94a3b8" # Bright Silver
+        elif self.rank == 4:
+            if "peak" in st: return "#a16207" # Sun Gold
+            return "#eab308" # Bright Gold
+        else:
+            if "peak" in st: return "#581c87" # Imperial Purple Crystal
+            return "#a855f7" # Violet Crystal
+
+    def nourish_aperture(self, drain_percentage: float = 30.0) -> Dict[str, Any]:
+        """
+        The Nourishment Loop (Micro-Progression):
+        Spend Primeval Essence to 'Wash the Aperture Walls'.
+        Yields 'Aperture Tempering Progress'. When reaching 100%, advances to next micro-stage.
+        """
+        st = self.stage.lower()
+        if "peak" in st:
+            return {
+                "success": False,
+                "message": "Peak Bottleneck Reached! The crystal aperture wall has reached its mortal limit for this Rank. Enter Closed Door Cultivation to Shatter the Aperture Wall.",
+                "stage": self.stage,
+                "nourish_progress": 100.0,
+                "cultivator": self.get_stats()
+            }
+
+        if self.primeval_essence < drain_percentage:
+            return {
+                "success": False,
+                "message": f"Insufficient Primeval Essence! Washing the aperture walls requires {drain_percentage}% Primeval Sea volume (Current: {self.primeval_essence:.1f}%).",
+                "stage": self.stage,
+                "nourish_progress": self.nourish_progress,
+                "cultivator": self.get_stats()
+            }
+
+        # Deduct essence strictly
+        self.primeval_essence = max(0.0, round(self.primeval_essence - drain_percentage, 2))
+        
+        # Add progress (34% per wash = 3 washes to advance)
+        self.nourish_progress = min(100.0, round(self.nourish_progress + 34.0, 1))
+
+        stage_promoted = False
+        old_stage = self.stage
+        if self.nourish_progress >= 100.0:
+            if "initial" in st:
+                self.stage = "Middle Stage"
+                self.nourish_progress = 0.0
+                stage_promoted = True
+            elif "middle" in st:
+                self.stage = "Upper Stage"
+                self.nourish_progress = 0.0
+                stage_promoted = True
+            elif "upper" in st:
+                self.stage = "Peak Stage"
+                self.nourish_progress = 0.0
+                stage_promoted = True
+
+        self.essence_type = self.get_essence_type()
+        
+        if stage_promoted:
+            msg = f"✨ STAGE BREAKTHROUGH! By washing the aperture crystal walls, your essence has condensed! Advanced from {old_stage} to {self.stage} (Essence Multiplier: {self.get_essence_multiplier()}x)!"
+        else:
+            msg = f"🌊 Aperture Washed! Drained {drain_percentage}% Primeval Essence to temper the crystal walls. Micro-stage progress: {self.nourish_progress}%."
+
+        return {
+            "success": True,
+            "stage_promoted": stage_promoted,
+            "message": msg,
+            "stage": self.stage,
+            "nourish_progress": self.nourish_progress,
+            "essence_multiplier": self.get_essence_multiplier(),
             "cultivator": self.get_stats()
         }
 

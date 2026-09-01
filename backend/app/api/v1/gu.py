@@ -127,6 +127,20 @@ async def capture_wild_gu(payload: Dict[str, Any]):
         "cultivator": player_cultivator.get_stats()
     }
 
+@router.post("/nourish")
+async def nourish_aperture(payload: Dict[str, Any] = {}):
+    """
+    The Nourishment Loop (Micro-Progression):
+    Washes the aperture crystal walls with Primeval Essence (e.g. 30% sea volume drain).
+    Yields Aperture Tempering Progress. Reaching 100% advances to the next micro-stage
+    (Initial -> Middle -> Upper -> Peak).
+    """
+    drain = payload.get("drain_percentage", 30.0)
+    result = player_cultivator.nourish_aperture(drain)
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("message", "Nourishment failed."))
+    return result
+
 @router.post("/ascend")
 async def attempt_ascend():
     """

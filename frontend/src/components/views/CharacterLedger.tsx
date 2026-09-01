@@ -294,18 +294,28 @@ export default function CharacterLedger({ onClose }: CharacterLedgerProps) {
             {/* Essence Sea Status */}
             <div className="space-y-1.5 font-sans text-xs">
               <div className="flex justify-between text-[#8a8275]">
-                <span>Primeval Sea Volume</span>
-                <span className="text-[#c89b3c] font-bold">{cultivator.primeval_essence} / {cultivator.max_essence}%</span>
+                <span>Primeval Sea Volume (Strict Aptitude Cap)</span>
+                <span className="font-bold" style={{ color: cultivator.essence_color || '#c89b3c' }}>
+                  {cultivator.primeval_essence} / {cultivator.max_essence}%
+                </span>
               </div>
               <div className="w-full h-3 bg-[#1a1814] rounded-full border border-[#2a2620] overflow-hidden">
                 <div 
-                  className="h-full bg-gradient-to-r from-[#8B6914] to-[#c89b3c] transition-all duration-500"
-                  style={{ width: `${Math.min(100, (cultivator.primeval_essence / cultivator.max_essence) * 100)}%` }}
+                  className="h-full transition-all duration-500 rounded-full"
+                  style={{ 
+                    width: `${Math.min(100, (cultivator.primeval_essence / cultivator.max_essence) * 100)}%`,
+                    backgroundColor: cultivator.essence_color || '#c89b3c'
+                  }}
                 />
               </div>
-              <span className="text-[10px] text-[#8a8275] block italic text-center mt-1">
-                {cultivator.essence_type}
-              </span>
+              <div className="flex justify-between items-center mt-1">
+                <span className="text-[10px] text-[#8a8275] italic">
+                  {cultivator.essence_type}
+                </span>
+                <span className="text-[10px] font-bold text-[#c89b3c] bg-[#241a12] px-2 py-0.5 rounded-full border border-[#c89b3c]/40">
+                  ⚡ {cultivator.essence_multiplier || 1}x Purity
+                </span>
+              </div>
             </div>
           </div>
 
@@ -317,6 +327,10 @@ export default function CharacterLedger({ onClose }: CharacterLedgerProps) {
                 <span className={`font-bold ${cultivator.aperture_status === 'Fractured' ? 'text-red-400' : 'text-emerald-400'}`}>
                   {cultivator.aperture_status === 'Fractured' ? '💀 Fractured (75%)' : '✨ Pristine (100%)'}
                 </span>
+              </div>
+              <div className="flex justify-between items-center border-t border-[#2a2620] pt-2">
+                <span className="text-[#8a8275] uppercase tracking-wider">Micro-Stage Tempering</span>
+                <span className="text-amber-400 font-bold">{cultivator.nourish_progress || 0}% / 100%</span>
               </div>
               <div className="flex justify-between items-center border-t border-[#2a2620] pt-2">
                 <span className="text-[#8a8275] uppercase tracking-wider">Wall Material</span>
