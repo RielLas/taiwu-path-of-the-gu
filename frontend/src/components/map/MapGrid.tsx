@@ -263,16 +263,16 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
                 </button>
               </div>
 
-              {/* Dynamic Hunter Matrix: Predator Pursuit Banner */}
+              {/* Dynamic Hunter Matrix: Predator Pursuit Banner (Relocated below header) */}
               {enforcer && enforcer.active && enforcer.status !== 'defeated' && (
-                <div className="absolute top-4 right-4 z-20 flex items-center gap-3 bg-gradient-to-r from-red-950/95 via-[#1a0808]/95 to-red-950/95 border-2 border-red-600/80 px-4 py-2 rounded-xl shadow-[0_0_30px_rgba(220,38,38,0.6)] backdrop-blur animate-pulse">
+                <div className="absolute top-24 right-8 z-30 flex items-center gap-3 bg-gradient-to-r from-red-950/95 via-[#1a0808]/95 to-red-950/95 border-2 border-red-600/80 px-4 py-2.5 rounded-2xl shadow-[0_8px_32px_rgba(220,38,38,0.7)] backdrop-blur-md animate-pulse">
                   <span className="text-xl animate-bounce">⚖️</span>
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="text-[11px] font-bold text-red-300 uppercase tracking-widest font-sans">
                         ⚠️ PREDATOR MATRIX: {enforcer.name}
                       </span>
-                      <span className="text-[9px] bg-red-900 text-red-200 px-1.5 py-0.2 rounded font-mono font-bold border border-red-500">
+                      <span className="text-[9px] bg-red-900 text-red-200 px-1.5 py-0.5 rounded font-mono font-bold border border-red-500 shadow">
                         ⚡ {Math.round(enforcer.stamina)} / {enforcer.max_stamina}
                       </span>
                     </div>

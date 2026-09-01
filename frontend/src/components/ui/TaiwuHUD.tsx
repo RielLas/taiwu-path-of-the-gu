@@ -70,35 +70,6 @@ export default function TaiwuHUD({ activeTab, setActiveTab }: TaiwuHUDProps) {
           {/* Subtle top glow line */}
           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[80%] h-[1px] bg-gradient-to-r from-transparent via-[#8a8275] to-transparent opacity-50"></div>
 
-          {/* Far-Right Floating Stamina & Meditate Console (Decoupled from Center Sphere) */}
-          <div className="absolute -top-6 right-6 md:right-14 flex items-center gap-2.5 z-30 pointer-events-auto">
-            {/* Stamina Pool Gauge */}
-            <div className="bg-[#12100d]/95 backdrop-blur-md border border-[#c89b3c]/40 px-3 py-1 rounded-full flex items-center gap-2 shadow-xl">
-              <span className="text-amber-400 text-xs font-bold font-mono">⚡ {Math.round(cultivator?.stamina ?? 100)} / {cultivator?.max_stamina ?? 100}</span>
-              <div className="w-14 h-1.5 bg-[#0a0907] rounded-full overflow-hidden border border-[#2a2620]">
-                <div 
-                  className="h-full bg-gradient-to-r from-amber-600 to-amber-300 rounded-full transition-all duration-300"
-                  style={{ width: `${Math.min(100, Math.max(0, ((cultivator?.stamina ?? 100) / (cultivator?.max_stamina || 100)) * 100))}%` }}
-                />
-              </div>
-              <span className="text-[9px] text-[#8a8275] uppercase tracking-wider font-sans font-bold">Stamina</span>
-            </div>
-
-            {/* Meditate Action Button */}
-            <button
-              onClick={handleMeditate}
-              disabled={isMeditating || (cultivator?.stamina || 0) < 20}
-              className={`px-3 py-1 rounded-full text-[10px] font-sans font-bold uppercase tracking-wider transition-all border flex items-center gap-1.5 shadow-xl cursor-pointer ${
-                (cultivator?.stamina || 0) >= 20 && !isMeditating
-                  ? 'bg-gradient-to-r from-amber-950 via-[#241a12] to-amber-900 border-[#c89b3c] text-amber-200 hover:brightness-125 hover:shadow-[0_0_15px_rgba(200,155,60,0.5)] active:scale-95'
-                  : 'bg-black/60 border-zinc-800 text-zinc-600 cursor-not-allowed'
-              }`}
-            >
-              <span>🧘</span>
-              <span>{isMeditating ? 'Meditating...' : 'Meditate (-20 ⚡)'}</span>
-            </button>
-          </div>
-
           {/* Left Side Portrait - Interactive Trigger for Character Ledger */}
           <div 
             onClick={() => handleTabChange('Ledger')}
@@ -224,6 +195,50 @@ export default function TaiwuHUD({ activeTab, setActiveTab }: TaiwuHUDProps) {
             </button>
           </div>
 
+        </div>
+      </div>
+
+      {/* Standalone Bottom-Right Stamina & Meditation Console */}
+      <div className="fixed bottom-8 right-8 z-50 pointer-events-auto flex flex-col items-end gap-2">
+        {/* Meditate Toast Notification */}
+        {meditateToast && (
+          <div className="px-3.5 py-1.5 bg-[#12100d]/95 border border-[#c89b3c] rounded-xl text-xs font-sans font-bold text-amber-200 shadow-[0_0_25px_rgba(200,155,60,0.4)] animate-fade-in pointer-events-none whitespace-nowrap">
+            {meditateToast}
+          </div>
+        )}
+
+        {/* Unified Dark-Glass Panel with Gold Accents */}
+        <div className="bg-[#12100d]/95 backdrop-blur-xl border border-[#c89b3c]/50 p-2.5 px-4 rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.8)] flex items-center gap-3.5 hover:border-[#c89b3c] transition-all">
+          {/* Stamina Meter */}
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center justify-between gap-3 text-[10px] font-sans font-bold uppercase tracking-wider">
+              <span className="text-[#8a8275]">Stamina (AP)</span>
+              <span className="text-amber-400 font-mono">⚡ {Math.round(cultivator?.stamina ?? 100)} / {cultivator?.max_stamina ?? 100}</span>
+            </div>
+            <div className="w-28 h-2 bg-[#0a0907] rounded-full overflow-hidden border border-[#2a2620]">
+              <div 
+                className="h-full bg-gradient-to-r from-amber-700 via-amber-500 to-amber-300 rounded-full transition-all duration-300 shadow-[0_0_10px_rgba(245,158,11,0.5)]"
+                style={{ width: `${Math.min(100, Math.max(0, ((cultivator?.stamina ?? 100) / (cultivator?.max_stamina || 100)) * 100))}%` }}
+              />
+            </div>
+          </div>
+
+          <div className="w-px h-8 bg-[#2a2620]" />
+
+          {/* Meditate Action Button */}
+          <button
+            onClick={handleMeditate}
+            disabled={isMeditating || (cultivator?.stamina || 0) < 20}
+            title="Burn 20 Stamina to restore Primeval Essence & HP"
+            className={`px-3 py-2 rounded-xl text-[10px] font-sans font-bold uppercase tracking-wider transition-all border flex items-center gap-1.5 shadow-lg cursor-pointer ${
+              (cultivator?.stamina || 0) >= 20 && !isMeditating
+                ? 'bg-gradient-to-r from-amber-950 via-[#2a1d12] to-amber-900 border-[#c89b3c] text-amber-200 hover:brightness-125 hover:shadow-[0_0_20px_rgba(200,155,60,0.6)] hover:scale-105 active:scale-95'
+                : 'bg-black/60 border-zinc-800 text-zinc-600 cursor-not-allowed opacity-60'
+            }`}
+          >
+            <span className="text-base">🧘</span>
+            <span>{isMeditating ? 'Meditating...' : 'Meditate (-20 ⚡)'}</span>
+          </button>
         </div>
       </div>
     </>
