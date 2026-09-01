@@ -18,7 +18,7 @@ interface MapGridProps {
 }
 
 const TILE_WIDTH = 192;
-const TILE_HEIGHT = 96;
+const TILE_HEIGHT = 192;
 
 export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
   const { 
@@ -40,6 +40,13 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
   const [encounterResult, setEncounterResult] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [zoomLevel, setZoomLevel] = useState<number>(1.0);
+
+  // Phase 1: Drag-to-Pan Camera State
+  const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const [lastMousePos, setLastMousePos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [hasMovedDuringDrag, setHasMovedDuringDrag] = useState<boolean>(false);
+
   const logsEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -64,14 +71,21 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
   const endX = startX + WINDOW_SIZE;
   const endY = startY + WINDOW_SIZE;
 
-  // Sliced 15x15 array (Only 225 tiles in DOM)
-  const visibleTiles = grid.filter(
-    (tile) => tile.x >= startX && tile.x < endX && tile.y >= startY && tile.y < endY
-  );
+  // Sliced 15x15 array sorted by isometric depth (X + Y)
+  const visibleTiles = grid
+    .filter((tile) => tile.x >= startX && tile.x < endX && tile.y >= startY && tile.y < endY)
+    .sort((a, b) => (a.x + a.y) - (b.x + b.y));
 
-  // Isometric Center Calculations for Player Position
-  const playerIsoX = (playerLocation.x - playerLocation.y) * (TILE_WIDTH / 2);
-  const playerIsoY = (playerLocation.x + playerLocation.y) * (TILE_HEIGHT / 2);
+  // Phase 2: Sealing Tile Gaps & Center Calculation
+  // Base player position in isometric space (using TILE_HEIGHT / 4 for vertical compression)
+  const playerBaseX = (playerLocation.x - playerLocation.y) * (TILE_WIDTH / 2);
+  const playerBaseY = (playerLocation.x + playerLocation.y) * (TILE_HEIGHT / 4);
+
+  // Center offset to lock player position at origin
+  const centerOffset = {
+    x: -playerBaseX,
+    y: -playerBaseY
+  };
 
   const isWayStationTile = (tile: any) => {
     if (!tile) return false;
@@ -251,17 +265,58 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
     setActiveEncounter(null);
   };
 
+  // Phase 1: Mouse Drag Event Handlers for Virtual Camera
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (e.button !== 0) return;
+    setIsDragging(true);
+    setHasMovedDuringDrag(false);
+    setLastMousePos({ x: e.clientX, y: e.clientY });
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging) return;
+    const deltaX = e.clientX - lastMousePos.x;
+    const deltaY = e.clientY - lastMousePos.y;
+
+    if (Math.abs(deltaX) > 2 || Math.abs(deltaY) > 2) {
+      setHasMovedDuringDrag(true);
+    }
+
+    setPan((prev) => ({
+      x: prev.x + deltaX,
+      y: prev.y + deltaY
+    }));
+
+    setLastMousePos({ x: e.clientX, y: e.clientY });
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  const handleMouseLeave = () => {
+    setIsDragging(false);
+  };
+
   const isPlayerOnWayStation = playerLocation.x === 15 && playerLocation.y === 15;
 
   return (
     <div className="relative w-full h-full min-h-screen bg-[#0a0907] overflow-hidden select-none font-serif flex flex-col md:flex-row">
 
-      {/* LEFT / CENTER VIEWPORT: Isometric Centered Canvas */}
-      <div className="flex-1 relative h-full w-full overflow-hidden bg-[#0a0907] flex items-center justify-center">
+      {/* LEFT / CENTER VIEWPORT: Drag-to-Pan Isometric Canvas */}
+      <div 
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseLeave}
+        className={`flex-1 relative h-full w-full overflow-hidden bg-[#0a0907] flex items-center justify-center ${
+          isDragging ? 'cursor-grabbing' : 'cursor-grab'
+        }`}
+      >
 
         {/* Phase 1: Dynamic Hunter Matrix Banner positioned safely at top-24 right-8 (z-40) */}
         {enforcer && enforcer.active && enforcer.status !== 'defeated' && (
-          <div className="absolute top-24 right-8 z-40 flex items-center gap-3 bg-gradient-to-r from-red-950/95 via-[#1a0808]/95 to-red-950/95 border-2 border-red-600/80 px-4 py-2.5 rounded-2xl shadow-[0_8px_32px_rgba(220,38,38,0.7)] animate-pulse">
+          <div className="absolute top-24 right-8 z-40 flex items-center gap-3 bg-gradient-to-r from-red-950/95 via-[#1a0808]/95 to-red-950/95 border-2 border-red-600/80 px-4 py-2.5 rounded-2xl shadow-[0_8px_32px_rgba(220,38,38,0.7)] animate-pulse pointer-events-none">
             <span className="text-xl animate-bounce">⚖️</span>
             <div>
               <div className="flex items-center gap-2">
@@ -280,7 +335,10 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
         )}
 
         {/* Sector Navigation & Camera Controls (z-30) */}
-        <div className="absolute top-4 left-4 z-30 flex items-center gap-2 bg-[#12100d] border border-[#2a2620] px-3.5 py-2 rounded-xl shadow-lg">
+        <div 
+          onMouseDown={(e) => e.stopPropagation()}
+          className="absolute top-4 left-4 z-30 flex items-center gap-2 bg-[#12100d] border border-[#2a2620] px-3.5 py-2 rounded-xl shadow-lg pointer-events-auto"
+        >
           <span className="text-[10px] uppercase font-sans tracking-[0.2em] text-[#c89b3c] font-bold">
             {currentRegionName} • [{playerLocation.x}, {playerLocation.y}]
           </span>
@@ -300,9 +358,12 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
             －
           </button>
           <button
-            onClick={() => setZoomLevel(1.0)}
+            onClick={() => {
+              setPan({ x: 0, y: 0 });
+              setZoomLevel(1.0);
+            }}
             className="text-[10px] text-[#8a8275] hover:text-[#c89b3c] px-2 py-0.5 rounded hover:bg-[#1a1814] uppercase tracking-wider font-bold transition-colors cursor-pointer"
-            title="Reset Zoom"
+            title="Reset Camera to Player Position"
           >
             Reset
           </button>
@@ -337,13 +398,13 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
 
         {/* Phase 2: Dynamic Centered Isometric World Container (z-0) */}
         <div
-          className="absolute inset-0 flex items-center justify-center overflow-hidden pointer-events-auto cursor-grab active:cursor-grabbing z-0"
+          className="absolute inset-0 flex items-center justify-center overflow-hidden pointer-events-none z-0"
         >
-          {/* Main Grid Centering Wrapper: Uses explicit translate to ensure player is always centered */}
+          {/* Main Grid Centering Wrapper with Scale and Origin */}
           <div
-            className="relative transition-transform duration-300 ease-out z-0"
+            className="relative pointer-events-auto"
             style={{
-              transform: `scale(${zoomLevel}) translate(calc(-${playerIsoX}px - ${TILE_WIDTH / 2}px), calc(-${playerIsoY}px - ${TILE_HEIGHT / 2}px))`,
+              transform: `scale(${zoomLevel})`,
               transformOrigin: 'center center',
               width: '0px',
               height: '0px',
@@ -363,11 +424,13 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
               const isFaction = Boolean(tile.type === 'Faction Outpost' || tile.terrain === 'Faction Outpost' || tile.is_faction_node);
               const tileAssetSrc = getTileAsset(tile);
 
-              // Phase 2: Explicit Isometric Math with 192px width and 96px height
-              const tileLeft = (tile.x - tile.y) * (TILE_WIDTH / 2);
-              const tileTop = (tile.x + tile.y) * (TILE_HEIGHT / 2);
+              // Phase 2: Tightened Absolute Isometric Math with TILE_HEIGHT / 4 vertical compression
+              const tileLeft = (tile.x - tile.y) * (TILE_WIDTH / 2) + centerOffset.x + pan.x;
+              const tileTop = (tile.x + tile.y) * (TILE_HEIGHT / 4) + centerOffset.y + pan.y;
 
-              const handleTileClick = () => {
+              const handleTileClick = (e: React.MouseEvent) => {
+                e.stopPropagation();
+                if (hasMovedDuringDrag) return;
                 if (isAdjacent) {
                   handleTravel(tile.x, tile.y);
                 } else if (isWayStation && (isPlayerHere || isAdjacent)) {
@@ -382,15 +445,16 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
                   onClick={handleTileClick}
                   style={{
                     position: 'absolute',
-                    left: `${tileLeft}px`,
-                    top: `${tileTop}px`,
+                    left: `${tileLeft - TILE_WIDTH / 2}px`,
+                    top: `${tileTop - TILE_HEIGHT / 2}px`,
                     width: `${TILE_WIDTH}px`,
                     height: `${TILE_HEIGHT}px`,
+                    zIndex: (tile.x + tile.y) * 2 + (isPlayerHere ? 100 : 0)
                   }}
                   className={`
-                    bg-[#1a1c1a] border border-[#2a2c2a] rounded-2xl overflow-hidden select-none transition-all duration-200 z-0
-                    ${isAdjacent ? 'cursor-pointer hover:border-amber-400 border-2 hover:scale-105 hover:z-30' : 'cursor-default'}
-                    ${isPlayerHere ? 'border-2 border-[#c89b3c] z-20 shadow-[0_0_15px_rgba(200,155,60,0.6)]' : ''}
+                    bg-[#1a1c1a] border border-[#2a2c2a] rounded-2xl overflow-hidden select-none transition-all duration-150
+                    ${isAdjacent ? 'cursor-pointer hover:border-amber-400 border-2 hover:scale-105' : 'cursor-default'}
+                    ${isPlayerHere ? 'border-2 border-[#c89b3c] shadow-[0_0_20px_rgba(200,155,60,0.7)]' : ''}
                   `}
                   title={`${isEnforcerHere ? `⚔️ ${enforcer?.name}` : isWayStation ? '🏮 Way Station' : isFaction ? `Faction Outpost: ${tile.faction}` : tile.type} (${tile.x}, ${tile.y})`}
                 >
@@ -401,27 +465,27 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
                     onError={(e) => {
                       (e.currentTarget as HTMLElement).style.display = 'none';
                     }}
-                    className={`w-full h-full object-cover select-none pointer-events-none z-0 ${
+                    className={`w-full h-full object-cover select-none pointer-events-none ${
                       !tile.discovered ? 'brightness-40 opacity-40' : 'brightness-100 opacity-100'
                     }`}
                     loading="lazy"
                   />
 
                   {/* Fallback Coordinate Indicator */}
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0 opacity-40">
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-40">
                     <span className="text-[10px] text-zinc-400 font-mono font-bold">[{tile.x},{tile.y}]</span>
                   </div>
 
                   {/* Faction Node Overlay Badge (z-10) */}
                   {isFaction && tile.discovered && (
-                    <div className="absolute top-1.5 left-2 z-10 bg-black/85 border border-[#c89b3c] px-2 py-0.5 rounded text-[10px] font-bold text-amber-200 uppercase font-serif">
+                    <div className="absolute top-2 left-2 z-10 bg-black/85 border border-[#c89b3c] px-2 py-0.5 rounded text-[10px] font-bold text-amber-200 uppercase font-serif">
                       {tile.faction || 'Sect Outpost'}
                     </div>
                   )}
 
                   {/* Way Station Overlay Badge (z-10) */}
                   {isWayStation && tile.discovered && (
-                    <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 z-10 bg-black/90 border border-amber-400 px-2.5 py-0.5 rounded-full text-[10px] font-bold text-amber-300 uppercase font-serif tracking-wider whitespace-nowrap">
+                    <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10 bg-black/90 border border-amber-400 px-2.5 py-0.5 rounded-full text-[10px] font-bold text-amber-300 uppercase font-serif tracking-wider whitespace-nowrap">
                       🏮 Way Station
                     </div>
                   )}
@@ -435,7 +499,7 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
                         onError={(e) => {
                           (e.currentTarget as HTMLElement).style.display = 'none';
                         }}
-                        className="w-12 h-12 object-contain pointer-events-none select-none drop-shadow"
+                        className="w-14 h-14 object-contain pointer-events-none select-none drop-shadow"
                       />
                       <span className="text-[9px] bg-black/90 text-amber-300 border border-amber-400 px-2 py-0.2 rounded-full font-bold uppercase tracking-wider font-mono">
                         {cultivator?.name || 'Cultivator'}
@@ -446,7 +510,7 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
                   {/* Predator Enforcer Entity (z-20) */}
                   {isEnforcerHere && (
                     <div className="absolute inset-0 flex flex-col items-center justify-center z-20 pointer-events-none">
-                      <div className="w-10 h-10 rounded-full bg-red-950/90 border-2 border-red-500 flex items-center justify-center text-red-200 font-bold text-[10px] uppercase font-sans tracking-widest animate-pulse">
+                      <div className="w-12 h-12 rounded-full bg-red-950/90 border-2 border-red-500 flex items-center justify-center text-red-200 font-bold text-xs uppercase font-sans tracking-widest animate-pulse">
                         ⚔️
                       </div>
                       <span className="text-[8px] bg-red-950 text-red-200 border border-red-500 px-1.5 py-0.2 rounded font-bold font-mono mt-0.5">
@@ -463,7 +527,10 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
       </div>
 
       {/* RIGHT DRAWER: Exploration Log & Sector Intel (z-30) */}
-      <div className="w-full md:w-80 h-48 md:h-full bg-[#12100d] border-t md:border-t-0 md:border-l border-[#2a2620] flex flex-col z-30">
+      <div 
+        onMouseDown={(e) => e.stopPropagation()}
+        className="w-full md:w-80 h-48 md:h-full bg-[#12100d] border-t md:border-t-0 md:border-l border-[#2a2620] flex flex-col z-30 pointer-events-auto"
+      >
         
         {/* Header */}
         <div className="p-3 border-b border-[#2a2620] bg-[#1a1814] flex justify-between items-center">
@@ -491,6 +558,10 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
             <span>Active Region:</span>
             <span className="text-[#d5cfc4] truncate max-w-[150px]">{currentRegionName}</span>
           </div>
+          <div className="flex justify-between text-[#8a8275]">
+            <span>Camera Pan:</span>
+            <span className="text-zinc-400 font-mono text-[11px]">X: {Math.round(pan.x)}, Y: {Math.round(pan.y)}</span>
+          </div>
         </div>
 
       </div>
@@ -503,8 +574,11 @@ export default function MapGrid({ initialNodeData, onExitNode }: MapGridProps) {
 
       {/* Interactive Tile Encounter Modal (z-50) */}
       {activeEncounter && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 select-none">
-          <div className="max-w-md w-full bg-[#12100d] border border-[#c89b3c] p-6 rounded-2xl font-serif text-center">
+        <div 
+          onMouseDown={(e) => e.stopPropagation()}
+          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 select-none"
+        >
+          <div className="max-w-md w-full bg-[#12100d] border border-[#c89b3c] p-6 rounded-2xl font-serif text-center pointer-events-auto">
             
             <h3 className="text-xl font-bold text-amber-300 tracking-wider mb-2">
               {activeEncounter.title || 'Sector Anomaly'}
