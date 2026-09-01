@@ -31,6 +31,9 @@ export interface WorldNode {
   terrain?: string;
   biome?: string;
   is_spirit_spring?: boolean;
+  is_faction_node?: boolean;
+  faction?: string;
+  faction_type?: string;
   harvested?: boolean;
   is_revealed: boolean;
   discovered: boolean;
@@ -59,6 +62,18 @@ export interface Encounter {
   enemy_atk?: number;
   reward_stones?: number;
   amount?: number;
+  faction?: string;
+  faction_type?: string;
+  standing?: string;
+  reputation?: number;
+  is_hostile?: boolean;
+  trade_inventory?: any[];
+  guard_enemy?: {
+    name: string;
+    hp: number;
+    atk: number;
+    reward_stones: number;
+  };
 }
 
 interface WorldState {

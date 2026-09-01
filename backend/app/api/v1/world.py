@@ -145,7 +145,66 @@ async def move_player(
     terrain = current_tile["type"] if current_tile else "Wilderness"
     
     # Generate encounter
-    if current_tile and current_tile.get("is_spirit_spring"):
+    if current_tile and current_tile.get("is_faction_node"):
+        faction_name = current_tile.get("faction", "Gu Yue Clan")
+        rep_info = player_cultivator.get_faction_reputation(faction_name)
+        is_hostile = rep_info["is_hostile"]
+        
+        # Build faction trade inventory
+        trade_items = [
+            {
+                "id": f"trade_{faction_name}_1",
+                "name": "Steel Skin Gu" if "Clan" in faction_name else "Merchant Spirit Gu",
+                "path": "Transformation Path" if "Clan" in faction_name else "Support Path",
+                "cost": 50,
+                "desc": "Hardens flesh into impervious steel armor (+25 Defense). Passive body Gu." if "Clan" in faction_name else "Enhances primeval sea capacity (+15 Max Essence).",
+                "gu": {
+                    "name": "Steel Skin Gu" if "Clan" in faction_name else "Merchant Spirit Gu",
+                    "tier": 2,
+                    "path": "Transformation Path" if "Clan" in faction_name else "Support Path",
+                    "gu_type": "passive_body",
+                    "food": "Steel Ore Shards",
+                    "effect_desc": "Tempering body with metallic steel fibers (+25 Defense).",
+                    "passive_buff": {"stat": "defense", "value": 25, "label": "Steel Armor"}
+                }
+            },
+            {
+                "id": f"trade_{faction_name}_2",
+                "name": "Wind Blade Gu",
+                "path": "Wind Path",
+                "cost": 45,
+                "desc": "Releases razor-sharp wind gale arcs (Deals 50 Wind DMG). Active combat Gu.",
+                "gu": {
+                    "name": "Wind Blade Gu",
+                    "tier": 2,
+                    "path": "Wind Path",
+                    "gu_type": "active",
+                    "food": "Gale Petals",
+                    "effect_desc": "Fires razor-sharp sonic wind blades (Deals 50 Wind damage). Costs 12% Essence.",
+                    "active_power": 50,
+                    "essence_cost": 12
+                }
+            }
+        ]
+
+        encounter = {
+            "type": "faction",
+            "title": f"{faction_name} Outpost",
+            "desc": f"You approach the fortified banners of {faction_name}. Clan warriors and sentries stand guard upon the battlements.",
+            "faction": faction_name,
+            "faction_type": current_tile.get("faction_type", "Righteous Clan"),
+            "standing": rep_info["standing"],
+            "reputation": rep_info["reputation"],
+            "is_hostile": is_hostile,
+            "trade_inventory": trade_items,
+            "guard_enemy": {
+                "name": f"{faction_name} Sentinel Patrol",
+                "hp": 95,
+                "atk": 30,
+                "reward_stones": 50
+            }
+        }
+    elif current_tile and current_tile.get("is_spirit_spring"):
         if not current_tile.get("harvested"):
             encounter = generate_tile_encounter("Spirit Spring")
             amt = encounter.get("amount", 75)
@@ -181,6 +240,9 @@ async def move_player(
             "terrain": terrain,
             "biome": current_tile.get("biome", "Southern Border Mountain") if current_tile else "Southern Border Mountain",
             "is_spirit_spring": current_tile.get("is_spirit_spring", False) if current_tile else False,
+            "is_faction_node": current_tile.get("is_faction_node", False) if current_tile else False,
+            "faction": current_tile.get("faction", None) if current_tile else None,
+            "faction_type": current_tile.get("faction_type", None) if current_tile else None,
             "harvested": current_tile.get("harvested", False) if current_tile else False
         },
         "event": encounter,
@@ -189,6 +251,28 @@ async def move_player(
         "starvation_alerts": starvation_alerts,
         "cultivator": cultivator_stats
     }
+
+@router.post("/faction/extort")
+async def faction_extort(payload: Dict[str, Any]):
+    """
+    Executes Demonic Armed Extortion against a Faction Outpost.
+    """
+    faction_name = payload.get("faction_name", "Gu Yue Clan")
+    res = player_cultivator.extort_faction(faction_name)
+    return res
+
+@router.post("/faction/trade")
+async def faction_trade(payload: Dict[str, Any]):
+    """
+    Executes an institutional trade transaction with a Faction Outpost.
+    """
+    faction_name = payload.get("faction_name", "Gu Yue Clan")
+    item_id = payload.get("item_id", "trade_1")
+    cost = payload.get("cost", 50)
+    gu_payload = payload.get("gu")
+    
+    res = player_cultivator.trade_with_faction(faction_name, item_id, cost, gu_payload)
+    return res
 
 @router.post("/harvest")
 async def harvest_node(payload: Dict[str, Any] = {}):

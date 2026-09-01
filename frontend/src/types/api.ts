@@ -209,3 +209,31 @@ export interface FeedVaultGuResponse {
   equipped_active_count: number;
   cultivator: CultivatorStats;
 }
+
+export interface FactionTradeItem {
+  id: string;
+  name: string;
+  path: string;
+  cost: number;
+  desc: string;
+  gu: Partial<GuWorm>;
+}
+
+export interface FactionEncounter {
+  type: 'faction';
+  title: string;
+  desc: string;
+  faction: string;
+  faction_type: string;
+  standing: string;
+  reputation: number;
+  is_hostile: boolean;
+  trade_inventory: FactionTradeItem[];
+  guard_enemy: {
+    name: string;
+    hp: number;
+    atk: number;
+    reward_stones: number;
+  };
+}
+

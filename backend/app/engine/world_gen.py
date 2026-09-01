@@ -24,10 +24,33 @@ REGION_BIOMES = {
     5: "Eastern Sea Reef"
 }
 
+REGION_FACTIONS = {
+    1: [
+        {"name": "Gu Yue Clan", "offset": (-3, -3), "type": "Righteous Clan Outpost"},
+        {"name": "Shang Clan Merchant City", "offset": (4, 3), "type": "Neutral Commercial Caravanserai"}
+    ],
+    2: [
+        {"name": "Central Continent Sect", "offset": (-3, -3), "type": "Righteous Sect Territory"},
+        {"name": "Shang Clan Merchant City", "offset": (4, 3), "type": "Trade Post"}
+    ],
+    3: [
+        {"name": "Shadow Sect Remnants", "offset": (-3, -3), "type": "Ancient Demonic Altar"},
+        {"name": "Gu Yue Clan", "offset": (4, 3), "type": "Expedition Camp"}
+    ],
+    4: [
+        {"name": "Bai Clan", "offset": (-3, -3), "type": "Plains Clan Outpost"},
+        {"name": "Xiong Clan", "offset": (4, 3), "type": "Plains Hunting Post"}
+    ],
+    5: [
+        {"name": "Xiong Clan", "offset": (-3, -3), "type": "Coastal Stronghold"},
+        {"name": "Shang Clan Merchant City", "offset": (4, 3), "type": "Maritime Harbor Post"}
+    ]
+}
+
 def generate_region(region_id: int, width: int = 15, height: int = 15, player_start: List[int] = [7, 7]) -> List[Dict[str, Any]]:
     """
     Procedurally generates a 15x15 grid of tiles for a region with consistent seed,
-    assigning biomes to terrain sectors and injecting static Spirit Spring resource nodes.
+    assigning biomes to terrain sectors and injecting static Spirit Springs and Institutional Faction Outposts.
     """
     tiles = []
     random.seed(region_id)
@@ -36,20 +59,40 @@ def generate_region(region_id: int, width: int = 15, height: int = 15, player_st
     px, py = player_start
     
     # Pre-determine static Spirit Spring locations (e.g. 2 static springs per region)
-    # Guaranteed not to spawn directly on the player start position [7, 7]
     spring_coords = set([
         ((px + 3) % width, (py - 3) % height),
         ((px - 4) % width, (py + 4) % height)
     ])
+
+    # Pre-determine Faction Outpost / Sect Territory locations
+    faction_configs = REGION_FACTIONS.get(region_id, REGION_FACTIONS[1])
+    faction_coords_map = {}
+    for fc in faction_configs:
+        ox, oy = fc["offset"]
+        fx = (px + ox) % width
+        fy = (py + oy) % height
+        faction_coords_map[(fx, fy)] = fc
     
     for y in range(height):
         for x in range(width):
+            is_spring = False
+            is_faction = False
+            tile_faction = None
+            tile_faction_type = None
+
             if (x, y) == (px, py):
                 terrain = "Sect Grounds"
                 tile_biome = dominant_biome
             elif (x, y) in spring_coords:
                 terrain = "Spirit Spring"
                 tile_biome = dominant_biome
+                is_spring = True
+            elif (x, y) in faction_coords_map:
+                terrain = "Faction Outpost"
+                tile_biome = dominant_biome
+                is_faction = True
+                tile_faction = faction_coords_map[(x, y)]["name"]
+                tile_faction_type = faction_coords_map[(x, y)]["type"]
             elif random.random() < 0.60:
                 terrain = dominant_biome
                 tile_biome = dominant_biome
@@ -59,7 +102,6 @@ def generate_region(region_id: int, width: int = 15, height: int = 15, player_st
                 
             # Initial fog of war: reveal tiles within distance 1 of player start
             is_revealed = abs(x - px) <= 1 and abs(y - py) <= 1
-            is_spring = terrain == "Spirit Spring"
             
             tile = {
                 "x": x,
@@ -68,6 +110,9 @@ def generate_region(region_id: int, width: int = 15, height: int = 15, player_st
                 "terrain": terrain,
                 "biome": tile_biome,
                 "is_spirit_spring": is_spring,
+                "is_faction_node": is_faction,
+                "faction": tile_faction,
+                "faction_type": tile_faction_type,
                 "harvested": False,
                 "is_revealed": is_revealed,
                 "discovered": is_revealed

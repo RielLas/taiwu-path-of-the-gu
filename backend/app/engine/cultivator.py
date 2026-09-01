@@ -27,6 +27,33 @@ class CultivatorState:
         self.base_defense: int = 5
         self.base_speed: int = 10
         self.current_hp: int = 100
+
+        # Dynamic Karmic & Institutional Standing State
+        self.alignment_score: int = -75
+        self.faction_reputations: Dict[str, int] = {
+            "Gu Yue Clan": -80,
+            "Bai Clan": -30,
+            "Xiong Clan": -50,
+            "Shang Clan Merchant City": 25,
+            "Shadow Sect Remnants": 0,
+            "Central Continent Sect": -10
+        }
+        self.active_bounties: List[Dict[str, Any]] = [
+            {
+                "id": "bounty_1",
+                "issuer": "Gu Yue Clan Elders",
+                "reward": "500 Primeval Stones",
+                "reason": "Defying Clan Hierarchy & Extortion of Disciples",
+                "threat_level": "High"
+            },
+            {
+                "id": "bounty_2",
+                "issuer": "Southern Border Merchant Guild",
+                "reward": "300 Primeval Stones",
+                "reason": "Unlicensed Black Market Gu Trading",
+                "threat_level": "Moderate"
+            }
+        ]
         
         # Starting inventory inside the Primeval Aperture
         self.aperture: List[Dict[str, Any]] = [
@@ -229,40 +256,60 @@ class CultivatorState:
             "aperture_dimensions": f"Spatial Dimension: {self.rank * 100} Li Diameter"
         }
 
+        # Dynamic Faction Standings Array
+        faction_list = []
+        faction_meta = {
+            "Gu Yue Clan": "Righteous Clan",
+            "Bai Clan": "Righteous Clan",
+            "Xiong Clan": "Righteous Clan",
+            "Shang Clan Merchant City": "Neutral Superclan",
+            "Shadow Sect Remnants": "Ancient Demonic Mystery",
+            "Central Continent Sect": "Righteous Sect Territory"
+        }
+        for fac_name, rep in self.faction_reputations.items():
+            if rep <= -60:
+                standing = "Hostile / Marked for Death"
+            elif rep <= -20:
+                standing = "Wary & Suspicious"
+            elif rep < 20:
+                standing = "Neutral / Uncommitted"
+            elif rep < 60:
+                standing = "Pragmatic Trading Partner"
+            else:
+                standing = "Allied Benefactor"
+                
+            faction_list.append({
+                "name": fac_name,
+                "standing": standing,
+                "reputation": rep,
+                "type": faction_meta.get(fac_name, "Independent Faction")
+            })
+
+        # Dynamic Alignment Description
+        if self.alignment_score <= -50:
+            align_desc = "Demonic Path (Ruthless & Pragmatic)"
+        elif self.alignment_score < 0:
+            align_desc = "Demonic-Leaning Pragmatist"
+        elif self.alignment_score == 0:
+            align_desc = "True Neutral Mortal"
+        elif self.alignment_score < 50:
+            align_desc = "Righteous-Leaning Cultivator"
+        else:
+            align_desc = "Orthodox Righteous Paragon"
+
         # Karmic & Social Ledger
         karmic_ledger = {
-            "alignment": "Demonic Path (Ruthless & Pragmatic)",
-            "alignment_score": -75,  # Range -100 (Demonic) to +100 (Righteous)
-            "reputation_title": "Demonic Scourge of Qing Mao Mountain",
+            "alignment": align_desc,
+            "alignment_score": self.alignment_score,  # Range -100 (Demonic) to +100 (Righteous)
+            "reputation_title": "Demonic Scourge of Qing Mao Mountain" if self.alignment_score < 0 else "Righteous Scion",
             "known_aliases": [
                 "Fang Yuan (方源)",
                 "Gu Yue Fang Yuan",
                 "Spring Autumn Reincarnator",
                 "Cold-Blooded Moonblade"
             ],
-            "active_bounties": [
-                {
-                    "id": "bounty_1",
-                    "issuer": "Gu Yue Clan Elders",
-                    "reward": "500 Primeval Stones",
-                    "reason": "Defying Clan Hierarchy & Extortion of Fellow Disciples",
-                    "threat_level": "High"
-                },
-                {
-                    "id": "bounty_2",
-                    "issuer": "Southern Border Merchant Guild",
-                    "reward": "300 Primeval Stones",
-                    "reason": "Unlicensed Black Market Gu Trading",
-                    "threat_level": "Moderate"
-                }
-            ],
-            "factions": [
-                {"name": "Gu Yue Clan", "standing": "Hostile / Marked for Execution", "reputation": -80, "type": "Righteous Clan"},
-                {"name": "Bai Clan", "standing": "Wary & Suspicious", "reputation": -30, "type": "Righteous Clan"},
-                {"name": "Xiong Clan", "standing": "Hostile Competitor", "reputation": -50, "type": "Righteous Clan"},
-                {"name": "Shang Clan Merchant City", "standing": "Pragmatic Trading Partner", "reputation": 25, "type": "Neutral Superclan"},
-                {"name": "Shadow Sect Remnants", "standing": "Veiled Observers", "reputation": 0, "type": "Ancient Demonic Mystery"}
-            ]
+            "active_bounties": self.active_bounties,
+            "factions": faction_list
         }
 
         return {
@@ -743,6 +790,123 @@ class CultivatorState:
             "vault_capacity": self.get_vault_capacity(),
             "max_active_slots": 3,
             "equipped_active_count": self.get_equipped_active_count(),
+            "cultivator": self.get_stats()
+        }
+
+    def get_faction_reputation(self, faction_name: str) -> Dict[str, Any]:
+        """
+        Retrieves standing and reputation for a specific faction.
+        """
+        rep = self.faction_reputations.get(faction_name, 0)
+        if rep <= -60:
+            standing = "Hostile / Marked for Death"
+        elif rep <= -20:
+            standing = "Wary & Suspicious"
+        elif rep < 20:
+            standing = "Neutral / Uncommitted"
+        elif rep < 60:
+            standing = "Pragmatic Trading Partner"
+        else:
+            standing = "Allied Benefactor"
+
+        return {
+            "faction": faction_name,
+            "reputation": rep,
+            "standing": standing,
+            "is_hostile": rep < 0
+        }
+
+    def extort_faction(self, faction_name: str) -> Dict[str, Any]:
+        """
+        Demonic Path Action: Armed extortion of clan outpost resources.
+        - Yields 80 Primeval Stones.
+        - Lowers faction reputation by 40.
+        - Shifts alignment score towards Demonic by -15.
+        - Triggers an active bounty from that faction on the player.
+        """
+        loot_stones = 80
+        self.spirit_stones += loot_stones
+        
+        old_rep = self.faction_reputations.get(faction_name, 0)
+        new_rep = max(-100, old_rep - 40)
+        self.faction_reputations[faction_name] = new_rep
+        
+        self.alignment_score = max(-100, self.alignment_score - 15)
+
+        # Trigger new active bounty
+        import uuid
+        bounty_id = f"bounty_{uuid.uuid4().hex[:6]}"
+        bounty = {
+            "id": bounty_id,
+            "issuer": f"{faction_name} Enforcement Watch",
+            "reward": f"{loot_stones * 5} Primeval Stones",
+            "reason": f"Armed Extortion & Robbery of {faction_name} Outpost Supply Cache",
+            "threat_level": "Severe" if new_rep <= -60 else "High"
+        }
+        self.active_bounties.append(bounty)
+
+        return {
+            "success": True,
+            "message": f"☠️ DEMONIC EXTORTION SUCCEEDED! You plundered {loot_stones} Primeval Stones from {faction_name}. Reputation collapsed by -40 (Now {new_rep}). A bounty has been placed on your head!",
+            "loot_stones": loot_stones,
+            "new_reputation": new_rep,
+            "alignment_score": self.alignment_score,
+            "bounty": bounty,
+            "cultivator": self.get_stats()
+        }
+
+    def trade_with_faction(self, faction_name: str, item_id: str, cost: int, gu_payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """
+        Righteous/Neutral Action: Trade Primeval Stones for faction Gu.
+        - Consumes cost Primeval Stones.
+        - Adds Gu to Vault / Aperture.
+        - Increases faction reputation by +5.
+        - Shifts alignment score towards Righteous by +2.
+        """
+        if self.spirit_stones < cost:
+            return {
+                "success": False,
+                "message": f"Insufficient Primeval Stones! Required: {cost}, Available: {self.spirit_stones}."
+            }
+
+        self.spirit_stones -= cost
+        
+        # Add Gu to vault if capacity allows, else directly to aperture or vault
+        added_gu = None
+        if gu_payload:
+            import uuid
+            gu_entry = {
+                "id": f"gu_{uuid.uuid4().hex[:6]}",
+                "name": gu_payload.get("name", "Purchased Gu"),
+                "tier": gu_payload.get("tier", 1),
+                "path": gu_payload.get("path", "General Path"),
+                "gu_type": gu_payload.get("gu_type", "active"),
+                "satiety": 100,
+                "hunger": 100,
+                "food": gu_payload.get("food", "Primeval Dew"),
+                "effect_desc": gu_payload.get("effect_desc", "Acquired via institutional trade."),
+                "passive_buff": gu_payload.get("passive_buff"),
+                "active_power": gu_payload.get("active_power", 30),
+                "essence_cost": gu_payload.get("essence_cost", 10)
+            }
+            if len(self.vault) < self.get_vault_capacity():
+                self.vault.append(gu_entry)
+            else:
+                self.aperture.append(gu_entry)
+            added_gu = gu_entry
+
+        # Faction relation bonus
+        old_rep = self.faction_reputations.get(faction_name, 0)
+        new_rep = min(100, old_rep + 5)
+        self.faction_reputations[faction_name] = new_rep
+        self.alignment_score = min(100, self.alignment_score + 2)
+
+        return {
+            "success": True,
+            "message": f"🤝 Trade Completed with {faction_name}! Acquired '{gu_payload.get('name', 'Gu')}' for {cost} Primeval Stones. Reputation increased (+5).",
+            "gu": added_gu,
+            "spirit_stones": self.spirit_stones,
+            "new_reputation": new_rep,
             "cultivator": self.get_stats()
         }
 

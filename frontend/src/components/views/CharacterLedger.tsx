@@ -371,25 +371,35 @@ export default function CharacterLedger({ onClose }: CharacterLedgerProps) {
           </div>
 
           {/* Alignment Gauge: Demonic vs Righteous */}
-          <div className="bg-[#171410] border border-[#2a2620] p-4 rounded-xl space-y-3 font-sans">
-            <div className="flex justify-between items-center text-xs">
-              <span className="text-red-400 font-bold uppercase tracking-wider">Demonic (魔道)</span>
-              <span className="text-xs font-bold text-[#d5cfc4]">{karmicLedger.alignment}</span>
-              <span className="text-sky-400 font-bold uppercase tracking-wider">Righteous (正道)</span>
+          <div className="bg-[#171410] border border-[#2a2620] p-4 rounded-xl flex flex-col gap-2.5 font-sans">
+            {/* Top row: Path title / classification */}
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-[#8a8275] uppercase tracking-widest font-semibold">Moral Disposition</span>
+              <span className="text-xs font-bold text-amber-300 bg-[#241a12] border border-[#c89b3c]/40 px-2 py-0.5 rounded">
+                {karmicLedger.alignment}
+              </span>
             </div>
 
-            {/* Slider Track */}
-            <div className="relative w-full h-3 bg-[#0a0907] rounded-full border border-[#2a2620] overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-r from-red-700 via-amber-600 to-sky-700 opacity-60"></div>
-              {/* Pointer Marker */}
-              <div 
-                className="absolute top-0 bottom-0 w-3 bg-white border border-black shadow-[0_0_10px_rgba(255,255,255,1)] -translate-x-1/2 transition-all duration-500 rounded-full"
-                style={{ left: `${alignmentPercent}%` }}
-              />
+            {/* Slider Row */}
+            <div className="space-y-1">
+              <div className="flex justify-between items-center text-[10px] font-bold tracking-wider">
+                <span className="text-red-400 uppercase">☠️ Demonic (魔道)</span>
+                <span className="text-sky-400 uppercase">⚖️ Righteous (正道)</span>
+              </div>
+
+              {/* Slider Track */}
+              <div className="relative w-full h-3 bg-[#0a0907] rounded-full border border-[#2a2620] overflow-hidden my-1">
+                <div className="absolute inset-0 bg-gradient-to-r from-red-700 via-amber-600 to-sky-700 opacity-60"></div>
+                {/* Pointer Marker */}
+                <div 
+                  className="absolute top-0 bottom-0 w-3 bg-white border border-black shadow-[0_0_10px_rgba(255,255,255,1)] -translate-x-1/2 transition-all duration-500 rounded-full"
+                  style={{ left: `${alignmentPercent}%` }}
+                />
+              </div>
             </div>
             
-            <span className="text-[10px] text-[#8a8275] block text-center">
-              Karma Rating: <strong className="text-red-400">{karmicLedger.alignment_score}</strong> (Self-Serving & Unshackled by Mortal Morality)
+            <span className="text-[10px] text-[#8a8275] block text-center pt-0.5 border-t border-[#2a2620]/60">
+              Karma Index: <strong className={karmicLedger.alignment_score < 0 ? 'text-red-400' : 'text-sky-400'}>{karmicLedger.alignment_score}</strong> ({karmicLedger.alignment_score < 0 ? 'Ruthless & Unshackled' : 'Bound by Clan Honor'})
             </span>
           </div>
 
